@@ -77,6 +77,10 @@ export class ConfigManager {
     this.config.set(key, value);
   }
 
+  delete(key: keyof GrokConfig): void {
+    this.config.delete(key);
+  }
+
   async setupAuth(): Promise<boolean> {
     const rl = readline.createInterface({
       input: process.stdin,

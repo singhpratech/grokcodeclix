@@ -473,7 +473,7 @@ export class GrokChat {
         break;
 
       case 'logout':
-        await this.config.set('apiKey', undefined as unknown as string);
+        this.config.delete('apiKey');
         console.log(chalk.dim('  ✓ Logged out. Run /login to authenticate again.\n'));
         break;
 
