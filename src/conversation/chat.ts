@@ -180,13 +180,13 @@ export class GrokChat {
 
   // Parse model string to determine base model and thinking mode
   private parseModelMode(model: string): void {
-    if (model.includes('fast-reasoning') || model.includes('reasoning')) {
+    if (model.includes('fast-reasoning') || model.includes('fast-non-reasoning')) {
       this.thinkingMode = !model.includes('non-reasoning');
       // Extract base model (e.g., grok-4-1 from grok-4-1-fast-reasoning)
-      this.baseModel = model.replace(/-fast-reasoning$/, '').replace(/-reasoning$/, '').replace(/-non-reasoning$/, '');
+      this.baseModel = model.replace(/-fast-reasoning$/, '').replace(/-fast-non-reasoning$/, '');
     } else {
       // Non-reasoning model or old format
-      this.thinkingMode = false;
+      this.thinkingMode = model.includes('reasoning');
       this.baseModel = model;
     }
   }
@@ -194,7 +194,7 @@ export class GrokChat {
   // Get current model name based on thinking mode
   private getCurrentModel(): string {
     if (this.baseModel.startsWith('grok-4')) {
-      return this.thinkingMode ? `${this.baseModel}-fast-reasoning` : `${this.baseModel}-non-reasoning`;
+      return this.thinkingMode ? `${this.baseModel}-fast-reasoning` : `${this.baseModel}-fast-non-reasoning`;
     }
     return this.baseModel;
   }
