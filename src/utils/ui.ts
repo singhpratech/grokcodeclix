@@ -268,7 +268,7 @@ const TIPS = [
   'Use /export conversation.md to save your chat',
   'The /doctor command checks your setup for issues',
   'You can resume previous sessions with /resume',
-  'Use /model to switch between grok-1, grok-2, and grok-3',
+  'Use /model to switch between Grok 4, Grok 3 and specialized models',
   'The /context command shows how much context you\'re using',
   'Session are auto-saved - you can always pick up where you left off',
   'Use /history to see your recent conversations',

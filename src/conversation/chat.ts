@@ -70,7 +70,7 @@ export class GrokChat {
 
   constructor(options: ChatOptions) {
     this.apiKey = options.apiKey;
-    this.client = new GrokClient(options.apiKey, options.model || 'grok-3');
+    this.client = new GrokClient(options.apiKey, options.model || 'grok-4-0709');
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -499,7 +499,8 @@ export class GrokChat {
         console.log(chalk.bold(`  ${category}:`));
         for (const model of models) {
           const current = model === this.client.model ? chalk.green(' ← current') : '';
-          const isRecommended = model === 'grok-3' || model === 'grok-4-0709';
+          // Reasoning models are recommended for coding tasks
+          const isRecommended = model.includes('reasoning') || model === 'grok-4-0709';
           const tag = isRecommended ? chalk.gray(' (recommended)') : '';
           console.log(`    ${chalk.cyan('•')} ${model}${current}${tag}`);
         }

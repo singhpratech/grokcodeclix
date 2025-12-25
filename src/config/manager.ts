@@ -11,7 +11,7 @@ interface GrokConfig {
 }
 
 const defaults: Omit<GrokConfig, 'apiKey'> = {
-  model: 'grok-3',
+  model: 'grok-4-0709',
   temperature: 0.7,
   maxTokens: 16384,
   autoApprove: [],

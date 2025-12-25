@@ -74,7 +74,7 @@ export class GrokClient {
   private baseUrl: string = 'https://api.x.ai/v1';
   public model: string;
 
-  constructor(apiKey: string, model: string = 'grok-3') {
+  constructor(apiKey: string, model: string = 'grok-4-0709') {
     this.apiKey = apiKey;
     this.model = model;
   }

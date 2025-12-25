@@ -15,7 +15,7 @@ program
 program
   .command('chat', { isDefault: true })
   .description('Start an interactive chat session')
-  .option('-m, --model <model>', 'Grok model to use', 'grok-3')
+  .option('-m, --model <model>', 'Grok model to use', 'grok-4-0709')
   .option('-r, --resume [sessionId]', 'Resume a previous conversation')
   .action(async (options) => {
     const config = new ConfigManager();

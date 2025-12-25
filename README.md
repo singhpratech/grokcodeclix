@@ -77,8 +77,8 @@ Familiar slash commands, permission system, and workflows. If you've used Claude
 </td>
 <td width="50%">
 
-### 7 Powerful Tools
-Read files, write code, execute commands, search codebases, and fetch web content - all with intelligent permission management.
+### 8 Powerful Tools
+Read files, write code, execute commands, search codebases, fetch web content, and **search the web** - all with intelligent permission management.
 
 ### Session Persistence
 Resume conversations where you left off. Your context, history, and progress are automatically saved.
@@ -155,7 +155,7 @@ That's it! You're ready to go.
 |---------|-------------|
 | **Interactive AI Chat** | Real-time conversation with Grok AI for coding assistance, debugging, and learning |
 | **Streaming Responses** | Token-by-token streaming for responsive, natural feedback |
-| **7 Powerful Tools** | Read, Write, Edit, Bash, Glob, Grep, WebFetch - everything you need |
+| **8 Powerful Tools** | Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch - everything you need |
 | **Permission System** | Color-coded risk levels with granular session-based approvals |
 | **Dynamic Model Support** | Automatically fetches latest models from xAI API |
 
@@ -198,17 +198,17 @@ Grok Code **automatically fetches the latest models** from the xAI API. When xAI
 ```
 🤖 Model Selection
 
-  Current: grok-3
+  Current: grok-4-0709
 
   Grok 4:
-    • grok-4-0709 (recommended)
+    • grok-4-0709 ← current (recommended)
     • grok-4-1-fast-non-reasoning
-    • grok-4-1-fast-reasoning
+    • grok-4-1-fast-reasoning (recommended)
     • grok-4-fast-non-reasoning
-    • grok-4-fast-reasoning
+    • grok-4-fast-reasoning (recommended)
 
   Grok 3:
-    • grok-3 ← current (recommended)
+    • grok-3
     • grok-3-mini
 
   Grok 2:
@@ -221,6 +221,8 @@ Grok Code **automatically fetches the latest models** from the xAI API. When xAI
   10 models available from xAI API
   Use /model <name> to switch.
 ```
+
+> **Note:** Reasoning models (`*-reasoning`) are recommended for complex coding tasks as they provide step-by-step thinking for better accuracy.
 
 ### Smart Model Matching
 
@@ -312,7 +314,7 @@ Grok Code includes **25+ built-in commands** for every workflow:
 
 ## Available Tools
 
-Grok Code has access to **7 powerful tools** that enable it to interact with your codebase:
+Grok Code has access to **8 powerful tools** that enable it to interact with your codebase and the web:
 
 ### 📖 Read Tool (Low Risk)
 
@@ -516,6 +518,45 @@ Limits:
 
 ---
 
+### 🔍 WebSearch Tool (Low Risk)
+
+Search the web for information, documentation, tutorials, and more.
+
+```
+Capabilities:
+  ✓ Real-time web search
+  ✓ Returns titles, URLs, and snippets
+  ✓ No API key required (uses DuckDuckGo)
+  ✓ Sources section for citations
+
+Limits:
+  → Maximum 20 results
+  → Query length: 500 characters
+```
+
+**Example Usage:**
+```
+You: Search for React hooks best practices
+Grok: [Uses WebSearch tool]
+
+🔍 Search Results for: "React hooks best practices"
+Found 10 results
+
+1. React Hooks Best Practices - Official Docs
+   https://react.dev/reference/react
+   Complete guide to React Hooks...
+
+2. 10 React Hooks Best Practices
+   https://blog.example.com/react-hooks
+   Learn the most important patterns...
+
+Sources:
+  • [React Hooks Best Practices](https://react.dev/reference/react)
+  • [10 React Hooks Best Practices](https://blog.example.com/react-hooks)
+```
+
+---
+
 ## Permission System
 
 Grok Code uses a **granular permission system** to keep you in control:
@@ -544,7 +585,7 @@ When Grok wants to use a tool, you'll see a beautifully formatted prompt:
 
 | Level | Icon | Color | Tools | Description |
 |-------|------|-------|-------|-------------|
-| **Read** | 📖 | Green | Read, Glob, Grep, WebFetch | Safe operations that only read data |
+| **Read** | 📖 | Green | Read, Glob, Grep, WebFetch, WebSearch | Safe operations that only read data |
 | **Write** | ✏️ | Yellow | Write, Edit | Modifies files but reversible |
 | **Execute** | ⚡ | Red | Bash | Runs commands with system access |
 
@@ -727,7 +768,7 @@ Blocked Protocols:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `apiKey` | string | - | Your xAI API key |
-| `model` | string | `grok-3` | Default Grok model |
+| `model` | string | `grok-4-0709` | Default Grok model (reasoning recommended) |
 | `temperature` | number | `0.7` | Response creativity (0.0 - 1.0) |
 | `maxTokens` | number | `16384` | Maximum response tokens |
 | `streaming` | boolean | `true` | Enable token streaming |
@@ -738,7 +779,7 @@ Blocked Protocols:
 ```json
 {
   "apiKey": "xai-your-api-key-here",
-  "model": "grok-3",
+  "model": "grok-4-0709",
   "temperature": 0.7,
   "maxTokens": 16384,
   "streaming": true,
@@ -964,9 +1005,9 @@ grokcodeclix/
 
 | Metric | Value |
 |--------|-------|
-| Total Lines | ~3,500 |
-| TypeScript Files | 15 |
-| Tools | 7 |
+| Total Lines | ~4,000 |
+| TypeScript Files | 16 |
+| Tools | 8 |
 | Slash Commands | 25+ |
 | Test Coverage | Growing |
 

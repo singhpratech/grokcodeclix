@@ -6,6 +6,7 @@ import { bashTool, BashToolParams } from './bash.js';
 import { globTool, GlobToolParams } from './glob.js';
 import { grepTool, GrepToolParams } from './grep.js';
 import { webFetchTool, WebFetchToolParams } from './webfetch.js';
+import { webSearchTool, WebSearchToolParams } from './websearch.js';
 
 export type ToolParams =
   | { name: 'Read'; params: ReadToolParams }
@@ -14,7 +15,8 @@ export type ToolParams =
   | { name: 'Bash'; params: BashToolParams }
   | { name: 'Glob'; params: GlobToolParams }
   | { name: 'Grep'; params: GrepToolParams }
-  | { name: 'WebFetch'; params: WebFetchToolParams };
+  | { name: 'WebFetch'; params: WebFetchToolParams }
+  | { name: 'WebSearch'; params: WebSearchToolParams };
 
 export interface ToolResult {
   success: boolean;
@@ -199,6 +201,27 @@ export const allTools: Tool[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'WebSearch',
+      description: 'Search the web for information. Returns search results with titles, URLs, and snippets. Use this to find current information, documentation, tutorials, or any web content.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The search query',
+          },
+          num_results: {
+            type: 'number',
+            description: 'Number of results to return (default: 10, max: 20)',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
 ];
 
 export async function executeTool(name: string, params: Record<string, unknown>): Promise<ToolResult> {
@@ -217,6 +240,8 @@ export async function executeTool(name: string, params: Record<string, unknown>)
       return grepTool(params as unknown as GrepToolParams);
     case 'WebFetch':
       return webFetchTool(params as unknown as WebFetchToolParams);
+    case 'WebSearch':
+      return webSearchTool(params as unknown as WebSearchToolParams);
     default:
       return { success: false, output: '', error: `Unknown tool: ${name}` };
   }
