@@ -1079,10 +1079,11 @@ Start by checking git status and recent changes, then provide specific, actionab
   }
 
   private async getStreamingResponse(): Promise<void> {
-    // Show appropriate indicator based on model type
     const isReasoning = this.client.model.includes('reasoning') && !this.client.model.includes('non-reasoning');
-    const indicator = isReasoning ? 'Thinking...' : '';
-    process.stdout.write('\n' + chalk.dim(`  ${indicator}`));
+
+    if (isReasoning) {
+      process.stdout.write('\n' + chalk.dim('  Thinking...'));
+    }
 
     let fullContent = '';
     let toolCalls: ToolCall[] = [];
@@ -1095,8 +1096,10 @@ Start by checking git status and recent changes, then provide specific, actionab
 
         if (delta?.content) {
           if (firstChunk) {
-            // Clear thinking indicator
-            process.stdout.write('\r' + ' '.repeat(20) + '\r\n');
+            if (isReasoning) {
+              process.stdout.write('\r' + ' '.repeat(20) + '\r');
+            }
+            console.log();
             firstChunk = false;
           }
           process.stdout.write(delta.content);
