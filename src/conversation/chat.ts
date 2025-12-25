@@ -8,6 +8,7 @@ import { allTools, executeTool } from '../tools/registry.js';
 import { PermissionManager } from '../permissions/manager.js';
 import { HistoryManager, ConversationSession } from './history.js';
 import { ConfigManager } from '../config/manager.js';
+import { drawBox, randomTip, divider, formatCodeBlock, progressBar } from '../utils/ui.js';
 
 const SYSTEM_PROMPT = `You are Grok Code, a powerful CLI coding assistant powered by xAI's Grok.
 You help users with software engineering tasks including writing code, debugging, explaining code, and managing files.
@@ -82,10 +83,29 @@ export class GrokChat {
   }
 
   async start(): Promise<void> {
-    console.log(chalk.cyan('\n🚀 Grok Code CLI'));
-    console.log(chalk.gray(`Model: ${this.client.model}`));
-    console.log(chalk.gray(`Working directory: ${process.cwd()}`));
-    console.log(chalk.gray('Type /help for commands, "exit" to quit.\n'));
+    // Beautiful welcome screen
+    console.log(chalk.cyan(`
+   ██████╗ ██████╗  ██████╗ ██╗  ██╗     ██████╗ ██████╗ ██████╗ ███████╗
+  ██╔════╝ ██╔══██╗██╔═══██╗██║ ██╔╝    ██╔════╝██╔═══██╗██╔══██╗██╔════╝
+  ██║  ███╗██████╔╝██║   ██║█████╔╝     ██║     ██║   ██║██║  ██║█████╗
+  ██║   ██║██╔══██╗██║   ██║██╔═██╗     ██║     ██║   ██║██║  ██║██╔══╝
+  ╚██████╔╝██║  ██║╚██████╔╝██║  ██╗    ╚██████╗╚██████╔╝██████╔╝███████╗
+   ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝     ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝`));
+
+    console.log();
+    console.log(drawBox([
+      `${chalk.bold('Grok Code CLI')} ${chalk.gray(`v${VERSION}`)}`,
+      '',
+      `${chalk.gray('Model:')}    ${chalk.green(this.client.model)}`,
+      `${chalk.gray('CWD:')}      ${chalk.blue(process.cwd())}`,
+      `${chalk.gray('Tools:')}    ${chalk.cyan('8 available')} ${chalk.gray('(Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch)')}`,
+      '',
+      `${chalk.gray('Commands:')} ${chalk.cyan('/help')} ${chalk.gray('•')} ${chalk.cyan('/model')} ${chalk.gray('•')} ${chalk.cyan('/doctor')} ${chalk.gray('•')} ${chalk.yellow('exit')}`,
+    ], { borderColor: chalk.cyan, padding: 0 }));
+
+    console.log();
+    console.log(randomTip());
+    console.log();
 
     // Create new session
     this.session = await this.history.createSession(process.cwd());
@@ -143,7 +163,7 @@ export class GrokChat {
   }
 
   private async loop(): Promise<void> {
-    const prompt = chalk.green('You: ');
+    const prompt = chalk.bold.green('❯ ');
 
     const question = (): Promise<string> => {
       return new Promise((resolve) => {
@@ -869,62 +889,58 @@ Start by checking git status and recent changes, then provide specific, actionab
   }
 
   private showHelp(): void {
-    console.log(chalk.cyan('\n📚 Grok Code CLI - Command Reference\n'));
-
-    console.log(chalk.bold('Session Management:'));
-    console.log('  /clear              Clear conversation and start fresh');
-    console.log('  /save, /s           Save current conversation');
-    console.log('  /history            Show saved conversations');
-    console.log('  /resume [id]        Resume a previous conversation');
-    console.log('  /rename <name>      Rename current session');
-    console.log('  /export [file]      Export conversation to file');
-    console.log('  /compact [focus]    Reduce context size (keep last 20 messages)');
-    console.log('  /exit, /q           Save and quit');
+    console.log();
+    console.log(chalk.cyan('╭──────────────────────────────────────────────────────────────────────╮'));
+    console.log(chalk.cyan('│') + chalk.bold.cyan('  📚 Grok Code CLI - Command Reference                                 ') + chalk.cyan('│'));
+    console.log(chalk.cyan('╰──────────────────────────────────────────────────────────────────────╯'));
     console.log();
 
-    console.log(chalk.bold('Configuration:'));
-    console.log('  /config             Show current configuration');
-    console.log('  /model [name]       Show or change the AI model');
-    console.log('  /stream             Toggle streaming mode');
-    console.log('  /permissions        View permission settings');
+    console.log(chalk.bold.cyan('  Session Management'));
+    console.log(chalk.gray('  ─────────────────────────────────────────────────────────────────'));
+    console.log(`  ${chalk.cyan('/clear')}              Clear conversation and start fresh`);
+    console.log(`  ${chalk.cyan('/save')}, ${chalk.cyan('/s')}           Save current conversation`);
+    console.log(`  ${chalk.cyan('/history')}            Show saved conversations`);
+    console.log(`  ${chalk.cyan('/resume')} ${chalk.gray('[id]')}        Resume a previous conversation`);
+    console.log(`  ${chalk.cyan('/rename')} ${chalk.gray('<name>')}      Rename current session`);
+    console.log(`  ${chalk.cyan('/export')} ${chalk.gray('[file]')}      Export conversation to file`);
+    console.log(`  ${chalk.cyan('/compact')} ${chalk.gray('[focus]')}    Reduce context size`);
+    console.log(`  ${chalk.cyan('/exit')}, ${chalk.cyan('/q')}           Save and quit`);
     console.log();
 
-    console.log(chalk.bold('Status & Info:'));
-    console.log('  /status             Show session status and info');
-    console.log('  /context            Visualize context usage');
-    console.log('  /cost               Show token usage and estimated cost');
-    console.log('  /usage              Show usage statistics');
-    console.log('  /doctor             Run diagnostics check');
-    console.log('  /version            Show version');
+    console.log(chalk.bold.cyan('  Configuration'));
+    console.log(chalk.gray('  ─────────────────────────────────────────────────────────────────'));
+    console.log(`  ${chalk.cyan('/config')}             Show current configuration`);
+    console.log(`  ${chalk.cyan('/model')} ${chalk.gray('[name]')}       Show or change the AI model`);
+    console.log(`  ${chalk.cyan('/stream')}             Toggle streaming mode`);
+    console.log(`  ${chalk.cyan('/permissions')}        View permission settings`);
     console.log();
 
-    console.log(chalk.bold('Project Setup:'));
-    console.log('  /init               Initialize project with GROK.md');
-    console.log('  /review [focus]     Request AI code review');
-    console.log('  /terminal-setup     Show terminal configuration tips');
+    console.log(chalk.bold.cyan('  Status & Diagnostics'));
+    console.log(chalk.gray('  ─────────────────────────────────────────────────────────────────'));
+    console.log(`  ${chalk.cyan('/status')}             Show session status and info`);
+    console.log(`  ${chalk.cyan('/context')}            Visualize context usage`);
+    console.log(`  ${chalk.cyan('/cost')}               Show token usage and estimated cost`);
+    console.log(`  ${chalk.cyan('/doctor')}             Run diagnostics check`);
+    console.log(`  ${chalk.cyan('/version')}            Show version`);
     console.log();
 
-    console.log(chalk.bold('Working Directory:'));
-    console.log('  /add-dir <path>     Add a working directory');
-    console.log('  /pwd                Show working directories');
+    console.log(chalk.bold.cyan('  Project Setup'));
+    console.log(chalk.gray('  ─────────────────────────────────────────────────────────────────'));
+    console.log(`  ${chalk.cyan('/init')}               Initialize project with GROK.md`);
+    console.log(`  ${chalk.cyan('/review')} ${chalk.gray('[focus]')}     Request AI code review`);
+    console.log(`  ${chalk.cyan('/terminal-setup')}     Show terminal tips`);
     console.log();
 
-    console.log(chalk.bold('Quick Aliases:'));
-    console.log('  /h                  Show this help');
-    console.log('  /c                  Clear conversation');
-    console.log('  /s                  Save session');
-    console.log('  /q                  Quit');
-    console.log('  exit, quit          Quit (same as /exit)');
-    console.log();
-
-    console.log(chalk.bold('Available Tools:'));
-    console.log('  Read      Read file contents with line numbers');
-    console.log('  Write     Create or overwrite files');
-    console.log('  Edit      Edit files by string replacement');
-    console.log('  Bash      Execute shell commands');
-    console.log('  Glob      Find files by pattern');
-    console.log('  Grep      Search file contents with regex');
-    console.log('  WebFetch  Fetch and parse web content');
+    console.log(chalk.bold.cyan('  Available Tools'));
+    console.log(chalk.gray('  ─────────────────────────────────────────────────────────────────'));
+    console.log(`  ${chalk.green('📖 Read')}       Read file contents with line numbers`);
+    console.log(`  ${chalk.yellow('✏️  Write')}      Create or overwrite files`);
+    console.log(`  ${chalk.yellow('🔧 Edit')}       Edit files by string replacement`);
+    console.log(`  ${chalk.red('⚡ Bash')}       Execute shell commands`);
+    console.log(`  ${chalk.green('🔍 Glob')}       Find files by pattern`);
+    console.log(`  ${chalk.green('🔎 Grep')}       Search file contents with regex`);
+    console.log(`  ${chalk.green('🌐 WebFetch')}   Fetch and parse web content`);
+    console.log(`  ${chalk.green('🔍 WebSearch')}  Search the web for information`);
     console.log();
 
     console.log(chalk.bold('Permission Responses:'));
@@ -991,17 +1007,25 @@ Start by checking git status and recent changes, then provide specific, actionab
   }
 
   private async getStreamingResponse(): Promise<void> {
-    process.stdout.write(chalk.blue('\nGrok: '));
+    // Show thinking indicator
+    process.stdout.write(chalk.cyan('\n╭─ ') + chalk.bold.cyan('Grok') + chalk.cyan(' ─────────────────────────────────────────────────────────────╮\n'));
+    process.stdout.write(chalk.cyan('│ ') + chalk.gray('⠋ thinking...'));
 
     let fullContent = '';
     let toolCalls: ToolCall[] = [];
     let currentToolCall: Partial<ToolCall> | null = null;
+    let firstChunk = true;
 
     try {
       for await (const chunk of this.client.chatStream(this.messages, allTools)) {
         const delta = chunk.choices[0]?.delta;
 
         if (delta?.content) {
+          if (firstChunk) {
+            // Clear thinking indicator and start content
+            process.stdout.write('\r' + chalk.cyan('│ ') + ' '.repeat(50) + '\r' + chalk.cyan('│ '));
+            firstChunk = false;
+          }
           process.stdout.write(delta.content);
           fullContent += delta.content;
         }
@@ -1035,7 +1059,14 @@ Start by checking git status and recent changes, then provide specific, actionab
         toolCalls.push(currentToolCall as ToolCall);
       }
 
-      console.log(); // New line after streaming
+      // Close the response box
+      if (fullContent) {
+        console.log();
+        console.log(chalk.cyan('╰──────────────────────────────────────────────────────────────────────╯'));
+      } else if (toolCalls.length > 0) {
+        process.stdout.write('\r' + chalk.cyan('│ ') + chalk.gray('Using tools...') + ' '.repeat(40) + '\n');
+        console.log(chalk.cyan('╰──────────────────────────────────────────────────────────────────────╯'));
+      }
 
       // Build the message for history
       const message: GrokMessage = {
@@ -1098,32 +1129,58 @@ Start by checking git status and recent changes, then provide specific, actionab
       return;
     }
 
-    // Show execution
-    console.log(chalk.yellow(`\n📦 ${name}`));
+    // Show execution with beautiful box
+    const toolIcons: Record<string, string> = {
+      Read: '📖', Write: '✏️', Edit: '🔧', Bash: '⚡',
+      Glob: '🔍', Grep: '🔎', WebFetch: '🌐', WebSearch: '🔍'
+    };
+    const toolColors: Record<string, typeof chalk> = {
+      Read: chalk.green, Write: chalk.yellow, Edit: chalk.yellow, Bash: chalk.red,
+      Glob: chalk.green, Grep: chalk.green, WebFetch: chalk.green, WebSearch: chalk.green
+    };
+
+    const icon = toolIcons[name] || '🔧';
+    const color = toolColors[name] || chalk.gray;
+
+    console.log();
+    console.log(color('┌─ ') + chalk.bold(`${icon} ${name}`) + color(' ─────────────────────────────────────────────────'));
+
+    // Show details based on tool type
     if (name === 'Bash') {
-      console.log(chalk.gray(`$ ${params.command}`));
+      console.log(color('│ ') + chalk.gray('$') + ' ' + chalk.white(params.command));
     } else if (name === 'Read' || name === 'Write' || name === 'Edit') {
-      console.log(chalk.gray(`→ ${params.file_path}`));
+      console.log(color('│ ') + chalk.gray('File:') + ' ' + chalk.cyan(params.file_path as string));
     } else if (name === 'Glob' || name === 'Grep') {
-      console.log(chalk.gray(`→ ${params.pattern}`));
+      console.log(color('│ ') + chalk.gray('Pattern:') + ' ' + chalk.cyan(params.pattern as string));
     } else if (name === 'WebFetch') {
-      console.log(chalk.gray(`→ ${params.url}`));
+      console.log(color('│ ') + chalk.gray('URL:') + ' ' + chalk.cyan(params.url as string));
+    } else if (name === 'WebSearch') {
+      console.log(color('│ ') + chalk.gray('Query:') + ' ' + chalk.cyan(params.query as string));
     }
 
     // Execute
     const result = await executeTool(name, params);
 
     if (result.success) {
-      console.log(chalk.green('✓ Success'));
+      console.log(color('│'));
+      console.log(color('│ ') + chalk.green('✓ Success'));
       if (result.output && result.output.length < 500) {
-        console.log(chalk.gray(result.output));
+        const lines = result.output.split('\n').slice(0, 10);
+        for (const line of lines) {
+          console.log(color('│ ') + chalk.gray(line.slice(0, 80)));
+        }
+        if (result.output.split('\n').length > 10) {
+          console.log(color('│ ') + chalk.gray('... (truncated)'));
+        }
       } else if (result.output) {
-        console.log(chalk.gray(result.output.slice(0, 500) + '... (truncated)'));
+        console.log(color('│ ') + chalk.gray(result.output.slice(0, 200) + '... (truncated)'));
       }
     } else {
-      console.log(chalk.red('✗ Failed'));
-      console.log(chalk.red(result.error || 'Unknown error'));
+      console.log(color('│'));
+      console.log(color('│ ') + chalk.red('✗ Failed: ') + chalk.red(result.error || 'Unknown error'));
     }
+
+    console.log(color('└──────────────────────────────────────────────────────────────────────'));
 
     this.messages.push({
       role: 'tool',
