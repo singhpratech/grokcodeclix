@@ -20,12 +20,32 @@ program
   .description('CLI coding assistant powered by Grok AI')
   .version(packageJson.version);
 
+// Helper to read piped stdin
+async function readStdin(): Promise<string | null> {
+  if (process.stdin.isTTY) return null;
+
+  return new Promise((resolve) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => { data += chunk; });
+    process.stdin.on('end', () => resolve(data.trim() || null));
+    process.stdin.on('error', () => resolve(null));
+
+    // Timeout after 100ms if no data
+    setTimeout(() => {
+      if (!data) resolve(null);
+    }, 100);
+  });
+}
+
 program
   .command('chat', { isDefault: true })
   .description('Start an interactive chat session')
+  .argument('[prompt...]', 'Optional prompt to send directly')
   .option('-m, --model <model>', 'Grok model to use', 'grok-4-1-fast-reasoning')
   .option('-r, --resume [sessionId]', 'Resume a previous conversation')
-  .action(async (options) => {
+  .option('-p, --print', 'Print response and exit (non-interactive)')
+  .action(async (promptArgs: string[], options) => {
     const config = new ConfigManager();
     let apiKey = await config.getApiKey();
 
@@ -48,13 +68,20 @@ program
       }
     }
 
-    // Start chat automatically after auth or if already authenticated
+    // Check for piped input or command line prompt
+    const stdinInput = await readStdin();
+    const cliPrompt = promptArgs.join(' ').trim();
+    const directPrompt = stdinInput || cliPrompt;
+
     const chat = new GrokChat({
       apiKey,
       model: options.model,
     });
 
-    if (options.resume !== undefined) {
+    if (directPrompt) {
+      // Non-interactive mode: send prompt and exit
+      await chat.sendSingle(directPrompt);
+    } else if (options.resume !== undefined) {
       const sessionId = typeof options.resume === 'string' ? options.resume : undefined;
       await chat.resume(sessionId);
     } else {

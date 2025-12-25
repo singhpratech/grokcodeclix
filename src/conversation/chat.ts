@@ -150,6 +150,29 @@ export class GrokChat {
     await this.loop();
   }
 
+  // Non-interactive single prompt mode (for piped input or CLI args)
+  async sendSingle(prompt: string): Promise<void> {
+    this.messages.push({
+      role: 'system',
+      content: SYSTEM_PROMPT,
+    });
+
+    this.messages.push({
+      role: 'user',
+      content: prompt,
+    });
+
+    try {
+      await this.getStreamingResponse();
+    } catch (error) {
+      const err = error as Error;
+      console.error(chalk.red(`Error: ${err.message}`));
+      process.exit(1);
+    }
+
+    process.exit(0);
+  }
+
   async resume(sessionId?: string): Promise<void> {
     let session: ConversationSession | null = null;
 
