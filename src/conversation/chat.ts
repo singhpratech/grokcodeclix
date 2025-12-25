@@ -450,39 +450,46 @@ export class GrokChat {
   }
 
   private async handleResume(sessionId: string): Promise<void> {
-    if (!sessionId) {
-      const sessions = await this.history.listSessions(5);
-      if (sessions.length === 0) {
-        console.log(chalk.yellow('No sessions to resume.\n'));
-        return;
-      }
+    const sessions = await this.history.listSessions(10);
 
-      console.log(chalk.cyan('\nRecent sessions:\n'));
-      sessions.forEach((s) => {
-        console.log(`  ${chalk.gray(s.id.slice(0, 8))}  ${s.title}`);
-      });
-      console.log(chalk.gray('\nUse /resume <session-id> to resume.\n'));
+    if (sessions.length === 0) {
+      console.log(chalk.dim('  No saved sessions.\n'));
       return;
     }
 
-    const session = await this.history.loadSession(sessionId);
+    // If no session ID provided, show interactive picker
+    if (!sessionId) {
+      const options: SelectorOption[] = sessions.map(s => {
+        const date = new Date(s.updatedAt).toLocaleDateString();
+        return {
+          label: s.title || s.id.slice(0, 8),
+          value: s.id,
+          description: `${date} • ${s.messages.length} msgs`,
+        };
+      });
+
+      console.log();
+      const selected = await interactiveSelect('Resume session:', options);
+      if (!selected) return;
+      sessionId = selected;
+    }
+
+    // Load the session
+    let session = await this.history.loadSession(sessionId);
     if (!session) {
       // Try partial match
-      const sessions = await this.history.listSessions(50);
       const match = sessions.find(s => s.id.startsWith(sessionId));
       if (match) {
-        this.session = match;
-        this.messages = match.messages;
-        console.log(chalk.white(`Resumed session: ${match.title}\n`));
+        session = match;
+      } else {
+        console.log(chalk.red(`  Session not found: ${sessionId}\n`));
         return;
       }
-      console.log(chalk.red(`Session not found: ${sessionId}\n`));
-      return;
     }
 
     this.session = session;
     this.messages = session.messages;
-    console.log(chalk.white(`Resumed session: ${session.title}\n`));
+    console.log(chalk.dim(`  ✓ Resumed: ${session.title}\n`));
   }
 
   private async handleRename(name: string): Promise<void> {
@@ -840,20 +847,31 @@ export class GrokChat {
     const sessions = await this.history.listSessions(10);
 
     if (sessions.length === 0) {
-      console.log(chalk.gray('No saved conversations.\n'));
+      console.log(chalk.dim('  No saved sessions.\n'));
       return;
     }
 
-    console.log(chalk.cyan('\n📚 Recent Conversations\n'));
-    for (const session of sessions) {
-      const date = new Date(session.updatedAt).toLocaleDateString();
-      const time = new Date(session.updatedAt).toLocaleTimeString();
-      const isCurrent = session.id === this.session?.id;
-      const marker = isCurrent ? chalk.white(' ← current') : '';
-      console.log(`  ${chalk.gray(session.id.slice(0, 8))}  ${session.title}${marker}`);
-      console.log(`           ${chalk.gray(`${date} ${time} • ${session.messages.length} messages`)}`);
+    const options: SelectorOption[] = sessions.map(s => {
+      const date = new Date(s.updatedAt).toLocaleDateString();
+      const isCurrent = s.id === this.session?.id;
+      return {
+        label: s.title || s.id.slice(0, 8),
+        value: s.id,
+        description: `${date} • ${s.messages.length} msgs${isCurrent ? ' (current)' : ''}`,
+      };
+    });
+
+    console.log();
+    const selected = await interactiveSelect('Sessions:', options, this.session?.id);
+
+    if (selected && selected !== this.session?.id) {
+      const session = sessions.find(s => s.id === selected);
+      if (session) {
+        this.session = session;
+        this.messages = session.messages;
+        console.log(chalk.dim(`  ✓ Switched to: ${session.title}\n`));
+      }
     }
-    console.log(chalk.gray('\nUse /resume <id> to switch sessions.\n'));
   }
 
   private async handleInit(): Promise<void> {
