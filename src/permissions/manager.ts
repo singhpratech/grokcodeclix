@@ -1,5 +1,6 @@
 import * as readline from 'readline';
 import chalk from 'chalk';
+import { interactiveSelect, SelectorOption } from '../utils/selector.js';
 
 export type ToolRiskLevel = 'read' | 'write' | 'execute';
 
@@ -88,58 +89,47 @@ export class PermissionManager {
     const color = RISK_COLORS[riskLevel];
     const icon = RISK_ICONS[riskLevel];
 
-    console.log(chalk.cyan('\n┌─────────────────────────────────────────────────────┐'));
-    console.log(chalk.cyan('│') + ` ${icon} ${color(`Permission Request: ${tool}`)}`.padEnd(60) + chalk.cyan('│'));
-    console.log(chalk.cyan('├─────────────────────────────────────────────────────┤'));
-    console.log(chalk.cyan('│') + ` ${description}`.padEnd(52) + chalk.cyan('│'));
-
-    // Show details
+    // Show what's being requested
+    console.log();
+    console.log(`  ${icon} ${color(tool)} ${chalk.dim('-')} ${description}`);
     if (details) {
-      console.log(chalk.cyan('├─────────────────────────────────────────────────────┤'));
       for (const [key, value] of Object.entries(details)) {
         const valueStr = typeof value === 'string'
-          ? value.length > 45 ? value.slice(0, 42) + '...' : value
+          ? value.length > 50 ? value.slice(0, 47) + '...' : value
           : String(value);
-        console.log(chalk.cyan('│') + chalk.gray(` ${key}: `) + valueStr.padEnd(42 - key.length) + chalk.cyan('│'));
+        console.log(chalk.dim(`     ${key}: ${valueStr}`));
       }
     }
-
-    console.log(chalk.cyan('└─────────────────────────────────────────────────────┘'));
-    console.log();
-    console.log(`  ${chalk.white('[y]')} Yes, allow once`);
-    console.log(`  ${chalk.white('[a]')} Allow for this session`);
-    console.log(`  ${chalk.red('[n]')} No, deny`);
-    console.log(`  ${chalk.red('[!]')} Deny and block for session`);
     console.log();
 
-    const answer = await this.question(chalk.cyan('Choice [y/a/n/!]: '));
-    const choice = answer.toLowerCase().trim();
+    const options: SelectorOption[] = [
+      { label: 'Allow once', value: 'once', description: 'permit this action' },
+      { label: 'Allow session', value: 'session', description: 'permit for session' },
+      { label: 'Deny', value: 'deny', description: 'reject this action' },
+      { label: 'Block', value: 'block', description: 'block tool for session' },
+    ];
+
+    const choice = await interactiveSelect('Permission:', options);
 
     switch (choice) {
-      case 'y':
-      case 'yes':
+      case 'once':
         return true;
 
-      case 'a':
-      case 'always':
+      case 'session':
         this.config.sessionApproved.add(this.getSessionKey(tool, details));
-        console.log(chalk.white(`✓ "${tool}" approved for this session.\n`));
+        console.log(chalk.dim(`  ✓ ${tool} approved for session`));
         return true;
 
-      case 'n':
-      case 'no':
-      case '':
-        console.log(chalk.yellow('⊘ Denied.\n'));
+      case 'deny':
+      case null:
         return false;
 
-      case '!':
       case 'block':
         this.config.alwaysDeny.push(tool);
-        console.log(chalk.red(`⛔ "${tool}" blocked for this session.\n`));
+        console.log(chalk.dim(`  ⛔ ${tool} blocked for session`));
         return false;
 
       default:
-        console.log(chalk.gray('Invalid choice, defaulting to deny.\n'));
         return false;
     }
   }
