@@ -102,19 +102,34 @@ export class GrokChat {
     '/review': 'Code review',
     '/add-dir': 'Add directory',
     '/pwd': 'Show directories',
+    '/login': 'Login to xAI',
+    '/logout': 'Logout',
   };
 
   constructor(options: ChatOptions) {
     this.apiKey = options.apiKey;
     this.client = new GrokClient(options.apiKey, options.model || 'grok-4-1-fast-reasoning');
 
-    const commands = Object.keys(GrokChat.SLASH_COMMANDS);
+    const commandEntries = Object.entries(GrokChat.SLASH_COMMANDS);
 
-    // Autocomplete function for slash commands
+    // Autocomplete function for slash commands - shows command with description
     const completer = (line: string): [string[], string] => {
       if (line.startsWith('/')) {
-        const hits = commands.filter(cmd => cmd.startsWith(line));
-        return [hits.length ? hits : commands, line];
+        const matches = commandEntries.filter(([cmd]) => cmd.startsWith(line));
+        if (matches.length > 0) {
+          // Format: "/cmd - description"
+          const formatted = matches.map(([cmd, desc]) => `${cmd.padEnd(14)} ${desc}`);
+          // Return just the command names for actual completion
+          const cmds = matches.map(([cmd]) => cmd);
+          // Show formatted list, complete with just command
+          if (matches.length === 1) {
+            return [[matches[0][0]], line];
+          }
+          return [formatted, line];
+        }
+        // Show all if just "/"
+        const all = commandEntries.map(([cmd, desc]) => `${cmd.padEnd(14)} ${desc}`);
+        return [all, line];
       }
       return [[], line];
     };
@@ -376,6 +391,23 @@ export class GrokChat {
           console.log(`  ${i === 0 ? chalk.white('→') : ' '} ${dir}`);
         });
         console.log();
+        break;
+
+      case 'login':
+        const loginSuccess = await this.config.setupAuth();
+        if (loginSuccess) {
+          const newKey = await this.config.getApiKey();
+          if (newKey) {
+            this.apiKey = newKey;
+            this.client = new GrokClient(newKey, this.client.model);
+            console.log(chalk.dim('  ✓ Logged in\n'));
+          }
+        }
+        break;
+
+      case 'logout':
+        await this.config.set('apiKey', undefined as unknown as string);
+        console.log(chalk.dim('  ✓ Logged out. Run /login to authenticate again.\n'));
         break;
 
       // Help
