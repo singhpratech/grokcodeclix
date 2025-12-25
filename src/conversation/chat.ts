@@ -77,43 +77,44 @@ export class GrokChat {
   private sessionStartTime: Date = new Date();
   private apiKey: string;
 
-  // All slash commands for autocomplete
-  private static SLASH_COMMANDS = [
-    '/help', '/h',
-    '/clear', '/c',
-    '/save', '/s',
-    '/exit', '/q',
-    '/history',
-    '/resume',
-    '/rename',
-    '/export',
-    '/compact',
-    '/config',
-    '/model',
-    '/stream',
-    '/permissions',
-    '/status',
-    '/context',
-    '/cost',
-    '/usage',
-    '/doctor',
-    '/version',
-    '/init',
-    '/review',
-    '/terminal-setup',
-    '/add-dir',
-    '/pwd',
-  ];
+  // Slash commands with descriptions
+  private static SLASH_COMMANDS: Record<string, string> = {
+    '/help': 'Show help',
+    '/clear': 'Clear conversation',
+    '/save': 'Save session',
+    '/exit': 'Exit',
+    '/history': 'Show history',
+    '/resume': 'Resume session',
+    '/rename': 'Rename session',
+    '/export': 'Export chat',
+    '/compact': 'Reduce context',
+    '/config': 'Show config',
+    '/model': 'Change model',
+    '/stream': 'Toggle streaming',
+    '/permissions': 'View permissions',
+    '/status': 'Show status',
+    '/context': 'Context usage',
+    '/cost': 'Token costs',
+    '/usage': 'Usage stats',
+    '/doctor': 'Run diagnostics',
+    '/version': 'Show version',
+    '/init': 'Create GROK.md',
+    '/review': 'Code review',
+    '/add-dir': 'Add directory',
+    '/pwd': 'Show directories',
+  };
 
   constructor(options: ChatOptions) {
     this.apiKey = options.apiKey;
     this.client = new GrokClient(options.apiKey, options.model || 'grok-4-1-fast-reasoning');
 
+    const commands = Object.keys(GrokChat.SLASH_COMMANDS);
+
     // Autocomplete function for slash commands
     const completer = (line: string): [string[], string] => {
       if (line.startsWith('/')) {
-        const hits = GrokChat.SLASH_COMMANDS.filter(cmd => cmd.startsWith(line));
-        return [hits.length ? hits : GrokChat.SLASH_COMMANDS, line];
+        const hits = commands.filter(cmd => cmd.startsWith(line));
+        return [hits.length ? hits : commands, line];
       }
       return [[], line];
     };
@@ -238,6 +239,16 @@ export class GrokChat {
         console.log(chalk.gray('\nSession saved. Goodbye!\n'));
         this.rl.close();
         break;
+      }
+
+      if (trimmed === '/') {
+        // Show slash command menu
+        console.log();
+        for (const [cmd, desc] of Object.entries(GrokChat.SLASH_COMMANDS)) {
+          console.log(`  ${chalk.cyan(cmd.padEnd(14))} ${chalk.dim(desc)}`);
+        }
+        console.log();
+        continue;
       }
 
       if (trimmed.startsWith('/')) {
