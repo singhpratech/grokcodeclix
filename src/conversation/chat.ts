@@ -242,12 +242,21 @@ export class GrokChat {
       }
 
       if (trimmed === '/') {
-        // Show slash command menu
-        console.log();
-        for (const [cmd, desc] of Object.entries(GrokChat.SLASH_COMMANDS)) {
-          console.log(`  ${chalk.cyan(cmd.padEnd(14))} ${chalk.dim(desc)}`);
+        // Interactive slash command menu
+        const options: SelectorOption[] = Object.entries(GrokChat.SLASH_COMMANDS).map(([cmd, desc]) => ({
+          label: cmd,
+          value: cmd,
+          description: desc,
+        }));
+
+        const selected = await interactiveSelect('Commands:', options);
+        if (selected) {
+          const shouldExit = await this.handleCommand(selected);
+          if (shouldExit) {
+            this.rl.close();
+            break;
+          }
         }
-        console.log();
         continue;
       }
 
