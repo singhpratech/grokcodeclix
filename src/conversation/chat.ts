@@ -285,6 +285,19 @@ export class GrokChat {
         console.log(chalk.cyan(`\nGrok Code CLI v${VERSION}\n`));
         break;
 
+      // Project Setup
+      case 'init':
+        await this.handleInit();
+        break;
+
+      case 'review':
+        await this.handleReview(args);
+        break;
+
+      case 'terminal-setup':
+        this.showTerminalSetup();
+        break;
+
       // Convenience aliases
       case 'h':
         this.showHelp();
@@ -670,6 +683,119 @@ export class GrokChat {
     console.log(chalk.gray('\nUse /resume <id> to switch sessions.\n'));
   }
 
+  private async handleInit(): Promise<void> {
+    const grokMdPath = path.join(process.cwd(), 'GROK.md');
+
+    try {
+      await fs.access(grokMdPath);
+      console.log(chalk.yellow('GROK.md already exists in this project.\n'));
+      console.log(chalk.gray('Edit it directly or delete it to re-initialize.\n'));
+      return;
+    } catch {
+      // File doesn't exist, create it
+    }
+
+    const template = `# Project Guide for Grok
+
+## Project Overview
+<!-- Describe what this project does -->
+
+## Tech Stack
+<!-- List the main technologies used -->
+
+## Project Structure
+<!-- Describe the key directories and files -->
+
+## Development Guidelines
+<!-- Any coding standards or practices to follow -->
+
+## Common Commands
+\`\`\`bash
+# Build the project
+npm run build
+
+# Run tests
+npm test
+
+# Start development server
+npm run dev
+\`\`\`
+
+## Notes for Grok
+<!-- Any specific instructions for the AI assistant -->
+- Always read files before editing
+- Run tests after making changes
+- Follow existing code patterns
+`;
+
+    await fs.writeFile(grokMdPath, template, 'utf-8');
+    console.log(chalk.green('✓ Created GROK.md\n'));
+    console.log(chalk.gray('Edit this file to help Grok understand your project better.\n'));
+    console.log(chalk.cyan('Contents will be automatically included in conversations.\n'));
+  }
+
+  private async handleReview(focus?: string): Promise<void> {
+    console.log(chalk.cyan('\n🔍 Starting Code Review\n'));
+
+    const reviewPrompt = focus
+      ? `Please review the code changes in this project, focusing on: ${focus}
+
+Check for:
+1. Code quality and best practices
+2. Potential bugs or issues
+3. Security vulnerabilities
+4. Performance concerns
+5. Test coverage gaps
+
+Provide specific, actionable feedback.`
+      : `Please review the recent code changes in this project.
+
+Check for:
+1. Code quality and best practices
+2. Potential bugs or issues
+3. Security vulnerabilities
+4. Performance concerns
+5. Test coverage gaps
+
+Start by checking git status and recent changes, then provide specific, actionable feedback.`;
+
+    // Send as a message to Grok
+    await this.processMessage(reviewPrompt);
+  }
+
+  private showTerminalSetup(): void {
+    console.log(chalk.cyan('\n⌨️  Terminal Setup\n'));
+
+    console.log(chalk.bold('Recommended Key Bindings:\n'));
+
+    console.log('  ' + chalk.green('Shift+Enter') + ' - Insert newline without sending');
+    console.log('  ' + chalk.green('Ctrl+C') + '      - Cancel current operation');
+    console.log('  ' + chalk.green('Ctrl+D') + '      - Exit (same as typing "exit")');
+    console.log('  ' + chalk.green('Up/Down') + '     - Navigate command history');
+    console.log();
+
+    console.log(chalk.bold('For Bash/Zsh (add to ~/.bashrc or ~/.zshrc):\n'));
+    console.log(chalk.gray('  # Grok Code CLI alias'));
+    console.log(chalk.cyan('  alias g="grok"'));
+    console.log(chalk.cyan('  alias gr="grok --resume"'));
+    console.log();
+
+    console.log(chalk.bold('For Fish (add to ~/.config/fish/config.fish):\n'));
+    console.log(chalk.gray('  # Grok Code CLI alias'));
+    console.log(chalk.cyan('  alias g "grok"'));
+    console.log(chalk.cyan('  alias gr "grok --resume"'));
+    console.log();
+
+    console.log(chalk.bold('VS Code Integration:\n'));
+    console.log('  Add to settings.json:');
+    console.log(chalk.gray('  "terminal.integrated.env.linux": {'));
+    console.log(chalk.gray('    "XAI_API_KEY": "your-api-key"'));
+    console.log(chalk.gray('  }'));
+    console.log();
+
+    console.log(chalk.gray('Tip: Run `grok auth` to save your API key permanently.\n'));
+  }
+
   private showHelp(): void {
     console.log(chalk.cyan('\n📚 Grok Code CLI - Command Reference\n'));
 
@@ -698,6 +824,12 @@ export class GrokChat {
     console.log('  /usage              Show usage statistics');
     console.log('  /doctor             Run diagnostics check');
     console.log('  /version            Show version');
+    console.log();
+
+    console.log(chalk.bold('Project Setup:'));
+    console.log('  /init               Initialize project with GROK.md');
+    console.log('  /review [focus]     Request AI code review');
+    console.log('  /terminal-setup     Show terminal configuration tips');
     console.log();
 
     console.log(chalk.bold('Working Directory:'));
