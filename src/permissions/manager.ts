@@ -27,7 +27,7 @@ const TOOL_RISK_LEVELS: Record<string, ToolRiskLevel> = {
 };
 
 const RISK_COLORS = {
-  read: chalk.green,
+  read: chalk.white,
   write: chalk.yellow,
   execute: chalk.red,
 };
@@ -106,8 +106,8 @@ export class PermissionManager {
 
     console.log(chalk.cyan('└─────────────────────────────────────────────────────┘'));
     console.log();
-    console.log(`  ${chalk.green('[y]')} Yes, allow once`);
-    console.log(`  ${chalk.green('[a]')} Allow for this session`);
+    console.log(`  ${chalk.white('[y]')} Yes, allow once`);
+    console.log(`  ${chalk.white('[a]')} Allow for this session`);
     console.log(`  ${chalk.red('[n]')} No, deny`);
     console.log(`  ${chalk.red('[!]')} Deny and block for session`);
     console.log();
@@ -123,7 +123,7 @@ export class PermissionManager {
       case 'a':
       case 'always':
         this.config.sessionApproved.add(this.getSessionKey(tool, details));
-        console.log(chalk.green(`✓ "${tool}" approved for this session.\n`));
+        console.log(chalk.white(`✓ "${tool}" approved for this session.\n`));
         return true;
 
       case 'n':

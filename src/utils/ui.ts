@@ -118,7 +118,7 @@ export function highlightCode(code: string, language?: string): string {
   let result = code;
 
   // Highlight strings
-  result = result.replace(/(["'`])(?:(?!\1)[^\\]|\\.)*\1/g, chalk.green('$&'));
+  result = result.replace(/(["'`])(?:(?!\1)[^\\]|\\.)*\1/g, chalk.white('$&'));
 
   // Highlight numbers
   result = result.replace(/\b(\d+\.?\d*)\b/g, chalk.yellow('$1'));
@@ -166,7 +166,7 @@ export function progressBar(current: number, total: number, width = 30): string 
   const filled = Math.round((percent / 100) * width);
   const empty = width - filled;
 
-  const bar = chalk.green('█'.repeat(filled)) + chalk.gray('░'.repeat(empty));
+  const bar = chalk.white('█'.repeat(filled)) + chalk.gray('░'.repeat(empty));
   return `[${bar}] ${percent}%`;
 }
 
@@ -186,7 +186,7 @@ export function spinner(): { start: () => void; stop: (success?: boolean) => voi
     stop(success = true) {
       if (interval) {
         clearInterval(interval);
-        const icon = success ? chalk.green('✓') : chalk.red('✗');
+        const icon = success ? chalk.white('✓') : chalk.red('✗');
         process.stdout.write(`\r${icon} ${text}\n`);
       }
     },
@@ -213,7 +213,7 @@ export function badge(text: string, type: 'info' | 'success' | 'warning' | 'erro
 export function tag(text: string, color: 'cyan' | 'green' | 'yellow' | 'red' | 'blue' | 'magenta' = 'cyan'): string {
   const colors = {
     cyan: chalk.cyan,
-    green: chalk.green,
+    green: chalk.white,
     yellow: chalk.yellow,
     red: chalk.red,
     blue: chalk.blue,
@@ -238,7 +238,7 @@ export function welcomeScreen(version: string, model: string, cwd: string): stri
   const info = [
     '',
     `  ${chalk.gray('Version:')}  ${chalk.cyan(version)}`,
-    `  ${chalk.gray('Model:')}    ${chalk.green(model)}`,
+    `  ${chalk.gray('Model:')}    ${chalk.white(model)}`,
     `  ${chalk.gray('CWD:')}      ${chalk.blue(cwd)}`,
     '',
     `  ${chalk.gray('Type')} ${chalk.cyan('/help')} ${chalk.gray('for commands,')} ${chalk.yellow('exit')} ${chalk.gray('to quit')}`,
@@ -252,7 +252,7 @@ export function compactWelcome(version: string, model: string): string {
   return `
 ${chalk.cyan('╭─────────────────────────────────────────────╮')}
 ${chalk.cyan('│')}  ${chalk.bold.cyan('🚀 Grok Code CLI')} ${chalk.gray(`v${version}`)}                    ${chalk.cyan('│')}
-${chalk.cyan('│')}  ${chalk.gray('Model:')} ${chalk.green(model.padEnd(32))}  ${chalk.cyan('│')}
+${chalk.cyan('│')}  ${chalk.gray('Model:')} ${chalk.white(model.padEnd(32))}  ${chalk.cyan('│')}
 ${chalk.cyan('│')}  ${chalk.gray('Type /help for commands, exit to quit')}    ${chalk.cyan('│')}
 ${chalk.cyan('╰─────────────────────────────────────────────╯')}
 `;
@@ -335,7 +335,7 @@ export function formatDiff(oldContent: string, newContent: string): string {
 
   while (oldIdx < oldLines.length || newIdx < newLines.length) {
     if (oldIdx >= oldLines.length) {
-      lines.push(chalk.green(`+ ${newLines[newIdx]}`));
+      lines.push(chalk.white(`+ ${newLines[newIdx]}`));
       newIdx++;
     } else if (newIdx >= newLines.length) {
       lines.push(chalk.red(`- ${oldLines[oldIdx]}`));
@@ -346,7 +346,7 @@ export function formatDiff(oldContent: string, newContent: string): string {
       newIdx++;
     } else {
       lines.push(chalk.red(`- ${oldLines[oldIdx]}`));
-      lines.push(chalk.green(`+ ${newLines[newIdx]}`));
+      lines.push(chalk.white(`+ ${newLines[newIdx]}`));
       oldIdx++;
       newIdx++;
     }

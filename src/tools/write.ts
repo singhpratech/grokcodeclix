@@ -56,7 +56,7 @@ export async function writeTool(params: WriteToolParams): Promise<ToolResult> {
     const lines = params.content.split('\n').length;
     const size = params.content.length;
 
-    let output = `${chalk.green('✓')} File written: ${filePath}\n`;
+    let output = `${chalk.white('✓')} File written: ${filePath}\n`;
     output += `  ${chalk.gray('Lines:')} ${lines}\n`;
     output += `  ${chalk.gray('Size:')} ${formatSize(size)}`;
 

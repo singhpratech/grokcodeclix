@@ -118,7 +118,7 @@ export class ConfigManager {
 
       try {
         await openBrowser(xaiUrl);
-        console.log(chalk.green('  ✓ Browser opened!'));
+        console.log(chalk.white('  ✓ Browser opened!'));
         console.log();
         console.log(chalk.gray('  ─────────────────────────────────────────────────────────────────'));
         console.log(chalk.gray('  Follow these steps in the browser:'));
@@ -186,12 +186,12 @@ export class ConfigManager {
       await this.setApiKey(apiKey.trim());
 
       // Success animation
-      console.log(`\r${chalk.green('  ✓ API key validated!')}                                 `);
+      console.log(`\r${chalk.white('  ✓ API key validated!')}                                 `);
       console.log();
       console.log(chalk.cyan('╭──────────────────────────────────────────────────────────────────────╮'));
       console.log(chalk.cyan('│') + chalk.bold.green('  🎉 Authentication Successful!                                        ') + chalk.cyan('│'));
       console.log(chalk.cyan('│') + `                                                                      ` + chalk.cyan('│'));
-      console.log(chalk.cyan('│') + `  ${chalk.gray('API Key:')}    ${chalk.green('✓ Saved securely')}                                      ` + chalk.cyan('│'));
+      console.log(chalk.cyan('│') + `  ${chalk.gray('API Key:')}    ${chalk.white('✓ Saved securely')}                                      ` + chalk.cyan('│'));
       console.log(chalk.cyan('│') + `  ${chalk.gray('Models:')}     ${chalk.cyan(modelCount + ' available')}                                          ` + chalk.cyan('│'));
       console.log(chalk.cyan('╰──────────────────────────────────────────────────────────────────────╯'));
       console.log();
@@ -212,7 +212,7 @@ export class ConfigManager {
     console.log(chalk.cyan('\n📋 Current Configuration\n'));
 
     const apiKey = await this.getApiKey();
-    console.log(`  API Key: ${apiKey ? chalk.green('✓ Set') : chalk.red('✗ Not set')}`);
+    console.log(`  API Key: ${apiKey ? chalk.white('✓ Set') : chalk.red('✗ Not set')}`);
     console.log(`  Model: ${this.get('model')}`);
     console.log(`  Temperature: ${this.get('temperature')}`);
     console.log(`  Max Tokens: ${this.get('maxTokens')}`);

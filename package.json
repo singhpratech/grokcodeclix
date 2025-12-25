@@ -1,6 +1,6 @@
 {
   "name": "grokcodecli",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "CLI coding assistant powered by Grok AI - like Claude Code but for xAI's Grok models",
   "main": "dist/index.js",
   "bin": {

@@ -132,7 +132,7 @@ export class GrokChat {
   async start(): Promise<void> {
     // Clean welcome like Claude Code
     console.log();
-    console.log(chalk.bold.cyan(' Grok Code') + chalk.dim(` v${VERSION}`));
+    console.log(chalk.bold.white(' Grok Code') + chalk.dim(` v${VERSION}`));
     console.log(chalk.dim(` ${this.client.model} • ${process.cwd()}`));
     console.log(chalk.dim(' Type /help for commands, Tab for autocomplete'));
     console.log();
@@ -181,7 +181,7 @@ export class GrokChat {
       console.log(chalk.gray('─── Recent context ───'));
       for (const msg of recentMessages) {
         if (msg.role === 'user') {
-          console.log(chalk.green('You: ') + chalk.gray(msg.content.slice(0, 100) + (msg.content.length > 100 ? '...' : '')));
+          console.log(chalk.white('You: ') + chalk.gray(msg.content.slice(0, 100) + (msg.content.length > 100 ? '...' : '')));
         } else if (msg.role === 'assistant' && msg.content) {
           console.log(chalk.blue('Grok: ') + chalk.gray(msg.content.slice(0, 100) + (msg.content.length > 100 ? '...' : '')));
         }
@@ -197,7 +197,7 @@ export class GrokChat {
       return new Promise((resolve) => {
         // Two-line input like Claude Code
         console.log(chalk.dim('─'.repeat(50)));
-        this.rl.question(chalk.bold.green('❯ '), (answer) => {
+        this.rl.question(chalk.bold.yellow('❯ '), (answer) => {
           resolve(answer);
         });
       });
@@ -251,7 +251,7 @@ export class GrokChat {
 
       case 'save':
         await this.saveSession();
-        console.log(chalk.green('Session saved.\n'));
+        console.log(chalk.white('Session saved.\n'));
         break;
 
       case 'compact':
@@ -321,7 +321,7 @@ export class GrokChat {
       case 'pwd':
         console.log(chalk.cyan(`\nWorking directories:\n`));
         this.workingDirs.forEach((dir, i) => {
-          console.log(`  ${i === 0 ? chalk.green('→') : ' '} ${dir}`);
+          console.log(`  ${i === 0 ? chalk.white('→') : ' '} ${dir}`);
         });
         console.log();
         break;
@@ -360,7 +360,7 @@ export class GrokChat {
 
       case 's':
         await this.saveSession();
-        console.log(chalk.green('Session saved.\n'));
+        console.log(chalk.white('Session saved.\n'));
         break;
 
       case 'c':
@@ -421,7 +421,7 @@ export class GrokChat {
       if (match) {
         this.session = match;
         this.messages = match.messages;
-        console.log(chalk.green(`Resumed session: ${match.title}\n`));
+        console.log(chalk.white(`Resumed session: ${match.title}\n`));
         return;
       }
       console.log(chalk.red(`Session not found: ${sessionId}\n`));
@@ -430,7 +430,7 @@ export class GrokChat {
 
     this.session = session;
     this.messages = session.messages;
-    console.log(chalk.green(`Resumed session: ${session.title}\n`));
+    console.log(chalk.white(`Resumed session: ${session.title}\n`));
   }
 
   private async handleRename(name: string): Promise<void> {
@@ -442,7 +442,7 @@ export class GrokChat {
     if (this.session) {
       this.session.title = name;
       await this.saveSession();
-      console.log(chalk.green(`Session renamed to: ${name}\n`));
+      console.log(chalk.white(`Session renamed to: ${name}\n`));
     } else {
       console.log(chalk.red('No active session to rename.\n'));
     }
@@ -460,7 +460,7 @@ export class GrokChat {
     if (filename) {
       const filePath = path.resolve(filename);
       await fs.writeFile(filePath, content, 'utf-8');
-      console.log(chalk.green(`Conversation exported to: ${filePath}\n`));
+      console.log(chalk.white(`Conversation exported to: ${filePath}\n`));
     } else {
       // Copy to clipboard concept - just show it
       console.log(chalk.cyan('\n─── Exported Conversation ───\n'));
@@ -476,9 +476,9 @@ export class GrokChat {
     console.log(chalk.cyan('\n⚙️  Configuration\n'));
 
     const apiKey = await this.config.getApiKey();
-    console.log(`  API Key:     ${apiKey ? chalk.green('✓ Set') : chalk.red('✗ Not set')}`);
+    console.log(`  API Key:     ${apiKey ? chalk.white('✓ Set') : chalk.red('✗ Not set')}`);
     console.log(`  Model:       ${this.client.model}`);
-    console.log(`  Streaming:   ${this.useStreaming ? chalk.green('enabled') : chalk.gray('disabled')}`);
+    console.log(`  Streaming:   ${this.useStreaming ? chalk.white('enabled') : chalk.gray('disabled')}`);
     console.log(`  Temperature: ${this.config.get('temperature')}`);
     console.log(`  Max Tokens:  ${this.config.get('maxTokens')}`);
     console.log(`  Auto-approve: ${(this.config.get('autoApprove') as string[]).join(', ') || 'none'}`);
@@ -538,7 +538,7 @@ export class GrokChat {
       }
 
       this.client = new GrokClient(this.apiKey, matchedModel);
-      console.log(chalk.green(`  ✓ Switched to ${matchedModel}`));
+      console.log(chalk.white(`  ✓ Switched to ${matchedModel}`));
       return;
     }
 
@@ -578,7 +578,7 @@ export class GrokChat {
 
     if (selected && selected !== this.client.model) {
       this.client = new GrokClient(this.apiKey, selected);
-      console.log(chalk.green(`  ✓ Switched to ${selected}`));
+      console.log(chalk.white(`  ✓ Switched to ${selected}`));
     } else if (!selected) {
       console.log(chalk.dim('  Cancelled'));
     }
@@ -587,7 +587,7 @@ export class GrokChat {
   private handlePermissions(): void {
     console.log(chalk.cyan('\n🔐 Permission Settings\n'));
     console.log('  Tool Risk Levels:');
-    console.log(`    ${chalk.green('📖 Read')}    - Read, Glob, Grep, WebFetch`);
+    console.log(`    ${chalk.white('📖 Read')}    - Read, Glob, Grep, WebFetch`);
     console.log(`    ${chalk.yellow('✏️  Write')}   - Write, Edit`);
     console.log(`    ${chalk.red('⚡ Execute')} - Bash`);
     console.log();
@@ -638,7 +638,7 @@ export class GrokChat {
     const barWidth = 40;
     const filledWidth = Math.round((usagePercent / 100) * barWidth);
     const emptyWidth = barWidth - filledWidth;
-    const bar = chalk.green('█'.repeat(filledWidth)) + chalk.gray('░'.repeat(emptyWidth));
+    const bar = chalk.white('█'.repeat(filledWidth)) + chalk.gray('░'.repeat(emptyWidth));
 
     console.log(`  [${bar}] ${usagePercent}%`);
     console.log();
@@ -747,9 +747,9 @@ export class GrokChat {
 
     // Display results
     for (const check of checks) {
-      const icon = check.status === 'ok' ? chalk.green('✓') :
+      const icon = check.status === 'ok' ? chalk.white('✓') :
                    check.status === 'warn' ? chalk.yellow('⚠') : chalk.red('✗');
-      const name = check.status === 'ok' ? chalk.green(check.name) :
+      const name = check.status === 'ok' ? chalk.white(check.name) :
                    check.status === 'warn' ? chalk.yellow(check.name) : chalk.red(check.name);
       console.log(`  ${icon} ${name.padEnd(20)} ${chalk.gray(check.message)}`);
     }
@@ -763,7 +763,7 @@ export class GrokChat {
     } else if (warnings > 0) {
       console.log(chalk.yellow(`  ${warnings} warning(s). Grok Code should work fine.\n`));
     } else {
-      console.log(chalk.green('  All checks passed! Grok Code is ready.\n'));
+      console.log(chalk.white('  All checks passed! Grok Code is ready.\n'));
     }
   }
 
@@ -781,7 +781,7 @@ export class GrokChat {
     }
 
     this.workingDirs.push(resolved);
-    console.log(chalk.green(`Added working directory: ${resolved}\n`));
+    console.log(chalk.white(`Added working directory: ${resolved}\n`));
   }
 
   private async showHistory(): Promise<void> {
@@ -797,7 +797,7 @@ export class GrokChat {
       const date = new Date(session.updatedAt).toLocaleDateString();
       const time = new Date(session.updatedAt).toLocaleTimeString();
       const isCurrent = session.id === this.session?.id;
-      const marker = isCurrent ? chalk.green(' ← current') : '';
+      const marker = isCurrent ? chalk.white(' ← current') : '';
       console.log(`  ${chalk.gray(session.id.slice(0, 8))}  ${session.title}${marker}`);
       console.log(`           ${chalk.gray(`${date} ${time} • ${session.messages.length} messages`)}`);
     }
@@ -850,7 +850,7 @@ npm run dev
 `;
 
     await fs.writeFile(grokMdPath, template, 'utf-8');
-    console.log(chalk.green('✓ Created GROK.md\n'));
+    console.log(chalk.white('✓ Created GROK.md\n'));
     console.log(chalk.gray('Edit this file to help Grok understand your project better.\n'));
     console.log(chalk.cyan('Contents will be automatically included in conversations.\n'));
   }
@@ -889,10 +889,10 @@ Start by checking git status and recent changes, then provide specific, actionab
 
     console.log(chalk.bold('Recommended Key Bindings:\n'));
 
-    console.log('  ' + chalk.green('Shift+Enter') + ' - Insert newline without sending');
-    console.log('  ' + chalk.green('Ctrl+C') + '      - Cancel current operation');
-    console.log('  ' + chalk.green('Ctrl+D') + '      - Exit (same as typing "exit")');
-    console.log('  ' + chalk.green('Up/Down') + '     - Navigate command history');
+    console.log('  ' + chalk.white('Shift+Enter') + ' - Insert newline without sending');
+    console.log('  ' + chalk.white('Ctrl+C') + '      - Cancel current operation');
+    console.log('  ' + chalk.white('Ctrl+D') + '      - Exit (same as typing "exit")');
+    console.log('  ' + chalk.white('Up/Down') + '     - Navigate command history');
     console.log();
 
     console.log(chalk.bold('For Bash/Zsh (add to ~/.bashrc or ~/.zshrc):\n'));
@@ -962,14 +962,14 @@ Start by checking git status and recent changes, then provide specific, actionab
 
     console.log(chalk.bold.cyan('  Available Tools'));
     console.log(chalk.gray('  ─────────────────────────────────────────────────────────────────'));
-    console.log(`  ${chalk.green('📖 Read')}       Read file contents with line numbers`);
+    console.log(`  ${chalk.white('📖 Read')}       Read file contents with line numbers`);
     console.log(`  ${chalk.yellow('✏️  Write')}      Create or overwrite files`);
     console.log(`  ${chalk.yellow('🔧 Edit')}       Edit files by string replacement`);
     console.log(`  ${chalk.red('⚡ Bash')}       Execute shell commands`);
-    console.log(`  ${chalk.green('🔍 Glob')}       Find files by pattern`);
-    console.log(`  ${chalk.green('🔎 Grep')}       Search file contents with regex`);
-    console.log(`  ${chalk.green('🌐 WebFetch')}   Fetch and parse web content`);
-    console.log(`  ${chalk.green('🔍 WebSearch')}  Search the web for information`);
+    console.log(`  ${chalk.white('🔍 Glob')}       Find files by pattern`);
+    console.log(`  ${chalk.white('🔎 Grep')}       Search file contents with regex`);
+    console.log(`  ${chalk.white('🌐 WebFetch')}   Fetch and parse web content`);
+    console.log(`  ${chalk.white('🔍 WebSearch')}  Search the web for information`);
     console.log();
 
     console.log(chalk.bold('Permission Responses:'));

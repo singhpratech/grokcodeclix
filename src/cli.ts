@@ -104,7 +104,7 @@ program
       await config.show();
     } else if (options.reset) {
       await config.reset();
-      console.log(chalk.green('Configuration reset to defaults.'));
+      console.log(chalk.white('Configuration reset to defaults.'));
     } else {
       await config.interactive();
     }

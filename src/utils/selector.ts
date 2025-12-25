@@ -41,7 +41,7 @@ export async function interactiveSelect(
 
         const pointer = isSelected ? chalk.cyan('❯') : ' ';
         const label = isSelected ? chalk.cyan.bold(opt.label) : opt.label;
-        const current = isCurrent ? chalk.green(' (current)') : '';
+        const current = isCurrent ? chalk.white(' (current)') : '';
         const desc = opt.description ? chalk.dim(` - ${opt.description}`) : '';
 
         console.log(`${pointer} ${label}${current}${desc}`);
@@ -53,7 +53,7 @@ export async function interactiveSelect(
     console.log(chalk.dim('↑↓/Tab to navigate, Enter to select, Esc to cancel'));
     for (const opt of options) {
       const isCurrent = opt.value === currentValue;
-      const current = isCurrent ? chalk.green(' (current)') : '';
+      const current = isCurrent ? chalk.white(' (current)') : '';
       const desc = opt.description ? chalk.dim(` - ${opt.description}`) : '';
       console.log(`  ${opt.label}${current}${desc}`);
     }
@@ -136,7 +136,7 @@ export async function confirm(message: string, defaultYes = true): Promise<boole
 
       if (char === 'y') {
         cleanup();
-        console.log(chalk.green('Yes'));
+        console.log(chalk.white('Yes'));
         resolve(true);
       } else if (char === 'n') {
         cleanup();
@@ -144,7 +144,7 @@ export async function confirm(message: string, defaultYes = true): Promise<boole
         resolve(false);
       } else if (char === '\r' || char === '\n') {
         cleanup();
-        console.log(defaultYes ? chalk.green('Yes') : chalk.red('No'));
+        console.log(defaultYes ? chalk.white('Yes') : chalk.red('No'));
         resolve(defaultYes);
       } else if (char === '\x03' || char === '\x1B') {
         cleanup();
