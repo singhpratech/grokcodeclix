@@ -76,6 +76,9 @@ export class GrokChat {
   private tokenUsage: TokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
   private sessionStartTime: Date = new Date();
   private apiKey: string;
+  private abortController: AbortController | null = null;
+  private thinkingMode: boolean = true; // true = reasoning model, false = fast model
+  private baseModel: string = 'grok-4-1'; // base model without mode suffix
 
   // Slash commands with descriptions
   private static SLASH_COMMANDS: Record<string, string> = {
@@ -108,7 +111,11 @@ export class GrokChat {
 
   constructor(options: ChatOptions) {
     this.apiKey = options.apiKey;
-    this.client = new GrokClient(options.apiKey, options.model || 'grok-4-1-fast-reasoning');
+
+    // Parse initial model to determine base and mode
+    const initialModel = options.model || 'grok-4-1-fast-reasoning';
+    this.parseModelMode(initialModel);
+    this.client = new GrokClient(options.apiKey, this.getCurrentModel());
 
     const commandEntries = Object.entries(GrokChat.SLASH_COMMANDS);
 
@@ -143,14 +150,60 @@ export class GrokChat {
     this.permissions.setReadlineInterface(this.rl);
     this.history = new HistoryManager();
     this.config = new ConfigManager();
+
+    // Handle Ctrl+C for clean exit
+    this.rl.on('SIGINT', async () => {
+      if (this.abortController) {
+        // If streaming, abort it
+        this.abortController.abort();
+        console.log(chalk.dim('\n  Stopped.'));
+      } else {
+        // Otherwise exit
+        await this.saveSession();
+        console.log(chalk.gray('\n\nSession saved. Goodbye!\n'));
+        process.exit(0);
+      }
+    });
+  }
+
+  // Parse model string to determine base model and thinking mode
+  private parseModelMode(model: string): void {
+    if (model.includes('fast-reasoning') || model.includes('reasoning')) {
+      this.thinkingMode = !model.includes('non-reasoning');
+      // Extract base model (e.g., grok-4-1 from grok-4-1-fast-reasoning)
+      this.baseModel = model.replace(/-fast-reasoning$/, '').replace(/-reasoning$/, '').replace(/-non-reasoning$/, '');
+    } else {
+      // Non-reasoning model or old format
+      this.thinkingMode = false;
+      this.baseModel = model;
+    }
+  }
+
+  // Get current model name based on thinking mode
+  private getCurrentModel(): string {
+    if (this.baseModel.startsWith('grok-4')) {
+      return this.thinkingMode ? `${this.baseModel}-fast-reasoning` : `${this.baseModel}-non-reasoning`;
+    }
+    return this.baseModel;
+  }
+
+  // Toggle between thinking and fast mode
+  private toggleThinkingMode(): void {
+    this.thinkingMode = !this.thinkingMode;
+    const newModel = this.getCurrentModel();
+    this.client = new GrokClient(this.apiKey, newModel);
+    const modeLabel = this.thinkingMode ? '🧠 Thinking' : '⚡ Fast';
+    console.log(chalk.dim(`  Switched to ${modeLabel} mode (${newModel})`));
   }
 
   async start(): Promise<void> {
     // Clean welcome like Claude Code
+    const modeIcon = this.thinkingMode ? '🧠' : '⚡';
+    const modeLabel = this.thinkingMode ? 'Thinking' : 'Fast';
     console.log();
     console.log(chalk.bold.white(' Grok Code') + chalk.dim(` v${VERSION}`));
-    console.log(chalk.dim(` ${this.client.model} • ${process.cwd()}`));
-    console.log(chalk.dim(' Type /help for commands, Tab for autocomplete'));
+    console.log(chalk.dim(` ${this.client.model} ${modeIcon} • ${process.cwd()}`));
+    console.log(chalk.dim(' Tab: toggle mode • Esc: stop • Ctrl+C: exit • /help'));
     console.log();
 
     // Create new session
@@ -234,9 +287,10 @@ export class GrokChat {
   private async loop(): Promise<void> {
     const showPrompt = (): Promise<string> => {
       return new Promise((resolve) => {
-        // Two-line input like Claude Code
+        // Show mode indicator and separator like Claude Code
+        const modeIcon = this.thinkingMode ? '🧠' : '⚡';
         console.log(chalk.dim('─'.repeat(50)));
-        this.rl.question(chalk.bold.yellow('❯ '), (answer) => {
+        this.rl.question(chalk.bold.yellow(`${modeIcon} ❯ `), (answer) => {
           resolve(answer);
         });
       });
@@ -246,7 +300,13 @@ export class GrokChat {
       const input = await showPrompt();
       const trimmed = input.trim();
 
-      if (!trimmed) continue;
+      // Empty input with Tab toggles mode (Tab adds \t when line is empty)
+      if (trimmed === '' || trimmed === '\t') {
+        if (input.includes('\t')) {
+          this.toggleThinkingMode();
+        }
+        continue;
+      }
 
       // Handle commands
       if (trimmed.toLowerCase() === 'exit' || trimmed.toLowerCase() === 'quit') {
@@ -1144,13 +1204,36 @@ Start by checking git status and recent changes, then provide specific, actionab
       process.stdout.write('\n' + chalk.dim('  Thinking...'));
     }
 
+    // Set up abort controller for Esc key
+    this.abortController = new AbortController();
+    let aborted = false;
+
+    // Listen for Esc key to stop streaming
+    const onKeypress = (key: Buffer) => {
+      // Esc key is \x1b (27)
+      if (key[0] === 27 && key.length === 1) {
+        aborted = true;
+        this.abortController?.abort();
+        process.stdout.write(chalk.dim('\n  Stopped.\n'));
+      }
+    };
+
+    // Enable raw mode to capture keypress
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.on('data', onKeypress);
+    }
+
     let fullContent = '';
     let toolCalls: ToolCall[] = [];
     let currentToolCall: Partial<ToolCall> | null = null;
     let firstChunk = true;
 
     try {
-      for await (const chunk of this.client.chatStream(this.messages, allTools)) {
+      for await (const chunk of this.client.chatStream(this.messages, allTools, { signal: this.abortController.signal })) {
+        if (aborted) break;
+
         const delta = chunk.choices[0]?.delta;
 
         if (delta?.content) {
@@ -1195,7 +1278,7 @@ Start by checking git status and recent changes, then provide specific, actionab
       }
 
       // End response
-      if (fullContent) {
+      if (fullContent && !aborted) {
         console.log('\n');
       } else if (toolCalls.length > 0 && firstChunk) {
         process.stdout.write('\r' + ' '.repeat(20) + '\r');
@@ -1213,16 +1296,27 @@ Start by checking git status and recent changes, then provide specific, actionab
 
       this.messages.push(message);
 
-      // Execute tool calls
-      if (toolCalls.length > 0) {
+      // Execute tool calls (if not aborted)
+      if (toolCalls.length > 0 && !aborted) {
         for (const toolCall of toolCalls) {
           await this.executeToolCall(toolCall);
         }
         await this.getStreamingResponse();
       }
     } catch (error) {
-      console.log();
-      throw error;
+      if ((error as Error).name === 'AbortError') {
+        // Ignore abort errors
+      } else {
+        console.log();
+        throw error;
+      }
+    } finally {
+      // Clean up keypress listener
+      if (process.stdin.isTTY) {
+        process.stdin.setRawMode(false);
+        process.stdin.removeListener('data', onKeypress);
+      }
+      this.abortController = null;
     }
   }
 

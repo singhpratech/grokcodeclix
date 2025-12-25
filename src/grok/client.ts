@@ -117,7 +117,7 @@ export class GrokClient {
   async *chatStream(
     messages: GrokMessage[],
     tools?: Tool[],
-    options: { temperature?: number; maxTokens?: number } = {}
+    options: { temperature?: number; maxTokens?: number; signal?: AbortSignal } = {}
   ): AsyncGenerator<StreamChunk> {
     const request: GrokCompletionRequest = {
       model: this.model,
@@ -139,6 +139,7 @@ export class GrokClient {
         'Authorization': `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(request),
+      signal: options.signal,
     });
 
     if (!response.ok) {
