@@ -226,6 +226,15 @@ export class GrokChat {
         continue;
       }
 
+      // Auto-compact at 80% context (estimate ~4 chars per token, 2M token limit)
+      const totalChars = this.messages.reduce((acc, m) => acc + (m.content?.length || 0), 0);
+      const estimatedTokens = totalChars / 4;
+      const maxTokens = 2_000_000;
+      if (estimatedTokens > maxTokens * 0.8) {
+        console.log(chalk.dim('  Auto-compacting context...'));
+        await this.handleCompact();
+      }
+
       await this.processMessage(trimmed);
     }
   }
