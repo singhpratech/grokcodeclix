@@ -119,8 +119,20 @@ export class GrokChat {
 
     const commandEntries = Object.entries(GrokChat.SLASH_COMMANDS);
 
+    // Track current line for Tab handling
+    let currentLine = '';
+
     // Autocomplete function for slash commands - shows command with description
+    // Also handles Tab on empty line to toggle mode
     const completer = (line: string): [string[], string] => {
+      currentLine = line;
+
+      // Tab on empty line - toggle mode (return special marker)
+      if (line === '') {
+        this.toggleThinkingMode();
+        return [[], ''];
+      }
+
       if (line.startsWith('/')) {
         const matches = commandEntries.filter(([cmd]) => cmd.startsWith(line));
         if (matches.length > 0) {
@@ -300,13 +312,8 @@ export class GrokChat {
       const input = await showPrompt();
       const trimmed = input.trim();
 
-      // Empty input with Tab toggles mode (Tab adds \t when line is empty)
-      if (trimmed === '' || trimmed === '\t') {
-        if (input.includes('\t')) {
-          this.toggleThinkingMode();
-        }
-        continue;
-      }
+      // Empty input - just continue (Tab toggle already handled in completer)
+      if (!trimmed) continue;
 
       // Handle commands
       if (trimmed.toLowerCase() === 'exit' || trimmed.toLowerCase() === 'quit') {
