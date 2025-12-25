@@ -438,29 +438,100 @@ export class GrokChat {
   }
 
   private async handleModel(modelName?: string): Promise<void> {
-    const availableModels = ['grok-3', 'grok-2', 'grok-1'];
+    // Fetch latest models from xAI API dynamically
+    console.log(chalk.gray('Fetching available models...\n'));
+
+    let availableModels: string[] = [];
+    try {
+      const response = await fetch('https://api.x.ai/v1/models', {
+        headers: { 'Authorization': `Bearer ${this.apiKey}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json() as { data: { id: string }[] };
+        availableModels = data.data.map(m => m.id).sort();
+      } else {
+        // Fallback to known models if API fails
+        availableModels = [
+          'grok-4-0709', 'grok-4-fast-reasoning', 'grok-4-fast-non-reasoning',
+          'grok-4-1-fast-reasoning', 'grok-4-1-fast-non-reasoning',
+          'grok-3', 'grok-3-mini', 'grok-code-fast-1',
+          'grok-2-vision-1212', 'grok-2-image-1212',
+        ];
+      }
+    } catch {
+      // Fallback to known models
+      availableModels = [
+        'grok-4-0709', 'grok-4-fast-reasoning', 'grok-4-fast-non-reasoning',
+        'grok-3', 'grok-3-mini', 'grok-code-fast-1',
+      ];
+    }
 
     if (!modelName) {
-      console.log(chalk.cyan('\n🤖 Model Selection\n'));
-      console.log(`  Current: ${chalk.green(this.client.model)}\n`);
-      console.log('  Available models:');
-      availableModels.forEach(m => {
-        const current = m === this.client.model ? chalk.green(' (current)') : '';
-        const recommended = m === 'grok-3' ? chalk.gray(' - recommended') : '';
-        console.log(`    • ${m}${current}${recommended}`);
-      });
-      console.log(chalk.gray('\n  Use /model <name> to switch.\n'));
+      console.log(chalk.cyan('🤖 Model Selection\n'));
+      console.log(`  ${chalk.gray('Current:')} ${chalk.green(this.client.model)}\n`);
+
+      // Categorize models dynamically
+      const categories: Record<string, string[]> = {
+        'Grok 4': [],
+        'Grok 3': [],
+        'Grok 2': [],
+        'Specialized': [],
+        'Other': [],
+      };
+
+      for (const model of availableModels) {
+        if (model.startsWith('grok-4')) {
+          categories['Grok 4'].push(model);
+        } else if (model.startsWith('grok-3')) {
+          categories['Grok 3'].push(model);
+        } else if (model.startsWith('grok-2')) {
+          categories['Grok 2'].push(model);
+        } else if (model.includes('code') || model.includes('vision') || model.includes('image')) {
+          categories['Specialized'].push(model);
+        } else {
+          categories['Other'].push(model);
+        }
+      }
+
+      for (const [category, models] of Object.entries(categories)) {
+        if (models.length === 0) continue;
+        console.log(chalk.bold(`  ${category}:`));
+        for (const model of models) {
+          const current = model === this.client.model ? chalk.green(' ← current') : '';
+          const isRecommended = model === 'grok-3' || model === 'grok-4-0709';
+          const tag = isRecommended ? chalk.gray(' (recommended)') : '';
+          console.log(`    ${chalk.cyan('•')} ${model}${current}${tag}`);
+        }
+        console.log();
+      }
+
+      console.log(chalk.gray(`  ${availableModels.length} models available from xAI API`));
+      console.log(chalk.gray('  Use /model <name> to switch.\n'));
       return;
     }
 
+    // Allow partial matching with normalization
+    let matchedModel = modelName;
     if (!availableModels.includes(modelName)) {
-      console.log(chalk.red(`Unknown model: ${modelName}`));
-      console.log(chalk.gray(`Available: ${availableModels.join(', ')}\n`));
-      return;
+      // Normalize input: "grok4" → "grok-4", "grok 3" → "grok-3"
+      const normalized = modelName.toLowerCase().replace(/grok\s*(\d)/g, 'grok-$1');
+      const partialMatch = availableModels.find(m =>
+        m.toLowerCase().includes(normalized) ||
+        m.toLowerCase().includes(modelName.toLowerCase())
+      );
+      if (partialMatch) {
+        matchedModel = partialMatch;
+        console.log(chalk.gray(`Matched: ${matchedModel}`));
+      } else {
+        console.log(chalk.red(`Unknown model: ${modelName}\n`));
+        console.log(chalk.gray('Use /model to see available models.\n'));
+        return;
+      }
     }
 
-    this.client = new GrokClient(this.apiKey, modelName);
-    console.log(chalk.green(`Switched to model: ${modelName}\n`));
+    this.client = new GrokClient(this.apiKey, matchedModel);
+    console.log(chalk.green(`✓ Switched to model: ${matchedModel}\n`));
   }
 
   private handlePermissions(): void {
