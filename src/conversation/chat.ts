@@ -1,14 +1,22 @@
 import * as readline from 'readline';
 import * as fs from 'fs/promises';
+import { readFileSync } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import chalk from 'chalk';
+import { fileURLToPath } from 'url';
 import { GrokClient, GrokMessage, ToolCall } from '../grok/client.js';
 import { allTools, executeTool } from '../tools/registry.js';
 import { PermissionManager } from '../permissions/manager.js';
 import { HistoryManager, ConversationSession } from './history.js';
 import { ConfigManager } from '../config/manager.js';
 import { drawBox, randomTip, divider, formatCodeBlock, progressBar } from '../utils/ui.js';
+import { interactiveSelect, SelectorOption } from '../utils/selector.js';
+
+// Get version from package.json
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const packageJson = JSON.parse(readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf-8'));
 
 const SYSTEM_PROMPT = `You are Grok Code, a powerful CLI coding assistant powered by xAI's Grok.
 You help users with software engineering tasks including writing code, debugging, explaining code, and managing files.
@@ -40,7 +48,7 @@ You help users with software engineering tasks including writing code, debugging
 - Platform: ${process.platform}
 - Date: ${new Date().toLocaleDateString()}`;
 
-const VERSION = '0.1.0';
+const VERSION = packageJson.version;
 
 export interface ChatOptions {
   apiKey: string;
@@ -69,12 +77,51 @@ export class GrokChat {
   private sessionStartTime: Date = new Date();
   private apiKey: string;
 
+  // All slash commands for autocomplete
+  private static SLASH_COMMANDS = [
+    '/help', '/h',
+    '/clear', '/c',
+    '/save', '/s',
+    '/exit', '/q',
+    '/history',
+    '/resume',
+    '/rename',
+    '/export',
+    '/compact',
+    '/config',
+    '/model',
+    '/stream',
+    '/permissions',
+    '/status',
+    '/context',
+    '/cost',
+    '/usage',
+    '/doctor',
+    '/version',
+    '/init',
+    '/review',
+    '/terminal-setup',
+    '/add-dir',
+    '/pwd',
+  ];
+
   constructor(options: ChatOptions) {
     this.apiKey = options.apiKey;
-    this.client = new GrokClient(options.apiKey, options.model || 'grok-4-0709');
+    this.client = new GrokClient(options.apiKey, options.model || 'grok-4-1-fast-reasoning');
+
+    // Autocomplete function for slash commands
+    const completer = (line: string): [string[], string] => {
+      if (line.startsWith('/')) {
+        const hits = GrokChat.SLASH_COMMANDS.filter(cmd => cmd.startsWith(line));
+        return [hits.length ? hits : GrokChat.SLASH_COMMANDS, line];
+      }
+      return [[], line];
+    };
+
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
+      completer,
     });
     this.permissions = new PermissionManager();
     this.permissions.setReadlineInterface(this.rl);
@@ -83,28 +130,11 @@ export class GrokChat {
   }
 
   async start(): Promise<void> {
-    // Beautiful welcome screen
-    console.log(chalk.cyan(`
-   ██████╗ ██████╗  ██████╗ ██╗  ██╗     ██████╗ ██████╗ ██████╗ ███████╗
-  ██╔════╝ ██╔══██╗██╔═══██╗██║ ██╔╝    ██╔════╝██╔═══██╗██╔══██╗██╔════╝
-  ██║  ███╗██████╔╝██║   ██║█████╔╝     ██║     ██║   ██║██║  ██║█████╗
-  ██║   ██║██╔══██╗██║   ██║██╔═██╗     ██║     ██║   ██║██║  ██║██╔══╝
-  ╚██████╔╝██║  ██║╚██████╔╝██║  ██╗    ╚██████╗╚██████╔╝██████╔╝███████╗
-   ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝     ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝`));
-
+    // Clean welcome like Claude Code
     console.log();
-    console.log(drawBox([
-      `${chalk.bold('Grok Code CLI')} ${chalk.gray(`v${VERSION}`)}`,
-      '',
-      `${chalk.gray('Model:')}    ${chalk.green(this.client.model)}`,
-      `${chalk.gray('CWD:')}      ${chalk.blue(process.cwd())}`,
-      `${chalk.gray('Tools:')}    ${chalk.cyan('8 available')} ${chalk.gray('(Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch)')}`,
-      '',
-      `${chalk.gray('Commands:')} ${chalk.cyan('/help')} ${chalk.gray('•')} ${chalk.cyan('/model')} ${chalk.gray('•')} ${chalk.cyan('/doctor')} ${chalk.gray('•')} ${chalk.yellow('exit')}`,
-    ], { borderColor: chalk.cyan, padding: 0 }));
-
-    console.log();
-    console.log(randomTip());
+    console.log(chalk.bold.cyan(' Grok Code') + chalk.dim(` v${VERSION}`));
+    console.log(chalk.dim(` ${this.client.model} • ${process.cwd()}`));
+    console.log(chalk.dim(' Type /help for commands, Tab for autocomplete'));
     console.log();
 
     // Create new session
@@ -458,8 +488,8 @@ export class GrokChat {
   }
 
   private async handleModel(modelName?: string): Promise<void> {
-    // Fetch latest models from xAI API dynamically
-    console.log(chalk.gray('Fetching available models...\n'));
+    // Fetch latest models from xAI API
+    process.stdout.write(chalk.dim('  Fetching models...'));
 
     let availableModels: string[] = [];
     try {
@@ -471,88 +501,87 @@ export class GrokChat {
         const data = await response.json() as { data: { id: string }[] };
         availableModels = data.data.map(m => m.id).sort();
       } else {
-        // Fallback to known models if API fails
         availableModels = [
-          'grok-4-0709', 'grok-4-fast-reasoning', 'grok-4-fast-non-reasoning',
           'grok-4-1-fast-reasoning', 'grok-4-1-fast-non-reasoning',
-          'grok-3', 'grok-3-mini', 'grok-code-fast-1',
-          'grok-2-vision-1212', 'grok-2-image-1212',
+          'grok-4-0709', 'grok-4-fast-reasoning', 'grok-4-fast-non-reasoning',
+          'grok-3', 'grok-3-mini',
         ];
       }
     } catch {
-      // Fallback to known models
       availableModels = [
-        'grok-4-0709', 'grok-4-fast-reasoning', 'grok-4-fast-non-reasoning',
-        'grok-3', 'grok-3-mini', 'grok-code-fast-1',
+        'grok-4-1-fast-reasoning', 'grok-4-1-fast-non-reasoning',
+        'grok-4-0709', 'grok-3', 'grok-3-mini',
       ];
     }
 
-    if (!modelName) {
-      console.log(chalk.cyan('🤖 Model Selection\n'));
-      console.log(`  ${chalk.gray('Current:')} ${chalk.green(this.client.model)}\n`);
+    process.stdout.write('\r\x1B[K'); // Clear the "Fetching" line
 
-      // Categorize models dynamically
-      const categories: Record<string, string[]> = {
-        'Grok 4': [],
-        'Grok 3': [],
-        'Grok 2': [],
-        'Specialized': [],
-        'Other': [],
-      };
+    // If model name provided directly, switch to it
+    if (modelName) {
+      let matchedModel = modelName;
+      if (!availableModels.includes(modelName)) {
+        // Normalize: "grok41" → "grok-4-1", "4.1" → "4-1"
+        const normalized = modelName.toLowerCase()
+          .replace(/grok\s*(\d)(\d)?/g, (_, d1, d2) => d2 ? `grok-${d1}-${d2}` : `grok-${d1}`)
+          .replace(/(\d+)\.(\d+)/g, '$1-$2')
+          .replace(/\s+/g, '-');
 
-      for (const model of availableModels) {
-        if (model.startsWith('grok-4')) {
-          categories['Grok 4'].push(model);
-        } else if (model.startsWith('grok-3')) {
-          categories['Grok 3'].push(model);
-        } else if (model.startsWith('grok-2')) {
-          categories['Grok 2'].push(model);
-        } else if (model.includes('code') || model.includes('vision') || model.includes('image')) {
-          categories['Specialized'].push(model);
+        const partialMatch = availableModels.find(m => m.toLowerCase().includes(normalized)) ||
+          availableModels.find(m => m.toLowerCase().includes(modelName.toLowerCase()));
+
+        if (partialMatch) {
+          matchedModel = partialMatch;
         } else {
-          categories['Other'].push(model);
+          console.log(chalk.red(`  Unknown model: ${modelName}`));
+          return;
         }
       }
 
-      for (const [category, models] of Object.entries(categories)) {
-        if (models.length === 0) continue;
-        console.log(chalk.bold(`  ${category}:`));
-        for (const model of models) {
-          const current = model === this.client.model ? chalk.green(' ← current') : '';
-          // Reasoning models are recommended for coding tasks
-          const isRecommended = model.includes('reasoning') || model === 'grok-4-0709';
-          const tag = isRecommended ? chalk.gray(' (recommended)') : '';
-          console.log(`    ${chalk.cyan('•')} ${model}${current}${tag}`);
-        }
-        console.log();
-      }
-
-      console.log(chalk.gray(`  ${availableModels.length} models available from xAI API`));
-      console.log(chalk.gray('  Use /model <name> to switch.\n'));
+      this.client = new GrokClient(this.apiKey, matchedModel);
+      console.log(chalk.green(`  ✓ Switched to ${matchedModel}`));
       return;
     }
 
-    // Allow partial matching with normalization
-    let matchedModel = modelName;
-    if (!availableModels.includes(modelName)) {
-      // Normalize input: "grok4" → "grok-4", "grok 3" → "grok-3"
-      const normalized = modelName.toLowerCase().replace(/grok\s*(\d)/g, 'grok-$1');
-      const partialMatch = availableModels.find(m =>
-        m.toLowerCase().includes(normalized) ||
-        m.toLowerCase().includes(modelName.toLowerCase())
-      );
-      if (partialMatch) {
-        matchedModel = partialMatch;
-        console.log(chalk.gray(`Matched: ${matchedModel}`));
-      } else {
-        console.log(chalk.red(`Unknown model: ${modelName}\n`));
-        console.log(chalk.gray('Use /model to see available models.\n'));
-        return;
-      }
+    // Build options for interactive selector - prioritize Grok 4.1
+    const options: SelectorOption[] = [];
+
+    // Categorize models
+    const grok41 = availableModels.filter(m => m.startsWith('grok-4-1'));
+    const grok4 = availableModels.filter(m => m.startsWith('grok-4') && !m.startsWith('grok-4-1'));
+    const grok3 = availableModels.filter(m => m.startsWith('grok-3'));
+    const others = availableModels.filter(m => !m.startsWith('grok-4') && !m.startsWith('grok-3'));
+
+    // Add Grok 4.1 first (latest)
+    for (const model of grok41) {
+      const desc = model.includes('non-reasoning') ? 'fast' : model.includes('reasoning') ? 'reasoning' : '';
+      options.push({ label: model, value: model, description: desc });
     }
 
-    this.client = new GrokClient(this.apiKey, matchedModel);
-    console.log(chalk.green(`✓ Switched to model: ${matchedModel}\n`));
+    // Add Grok 4
+    for (const model of grok4) {
+      const desc = model.includes('non-reasoning') ? 'fast' : model.includes('reasoning') ? 'reasoning' : '';
+      options.push({ label: model, value: model, description: desc });
+    }
+
+    // Add Grok 3
+    for (const model of grok3) {
+      options.push({ label: model, value: model });
+    }
+
+    // Add others
+    for (const model of others) {
+      options.push({ label: model, value: model });
+    }
+
+    console.log();
+    const selected = await interactiveSelect('Select model:', options, this.client.model);
+
+    if (selected && selected !== this.client.model) {
+      this.client = new GrokClient(this.apiKey, selected);
+      console.log(chalk.green(`  ✓ Switched to ${selected}`));
+    } else if (!selected) {
+      console.log(chalk.dim('  Cancelled'));
+    }
   }
 
   private handlePermissions(): void {
@@ -1007,9 +1036,8 @@ Start by checking git status and recent changes, then provide specific, actionab
   }
 
   private async getStreamingResponse(): Promise<void> {
-    // Show thinking indicator
-    process.stdout.write(chalk.cyan('\n╭─ ') + chalk.bold.cyan('Grok') + chalk.cyan(' ─────────────────────────────────────────────────────────────╮\n'));
-    process.stdout.write(chalk.cyan('│ ') + chalk.gray('⠋ thinking...'));
+    // Simple thinking indicator like Claude Code
+    process.stdout.write('\n' + chalk.dim('  Thinking...'));
 
     let fullContent = '';
     let toolCalls: ToolCall[] = [];
@@ -1022,8 +1050,8 @@ Start by checking git status and recent changes, then provide specific, actionab
 
         if (delta?.content) {
           if (firstChunk) {
-            // Clear thinking indicator and start content
-            process.stdout.write('\r' + chalk.cyan('│ ') + ' '.repeat(50) + '\r' + chalk.cyan('│ '));
+            // Clear thinking indicator
+            process.stdout.write('\r' + ' '.repeat(20) + '\r\n');
             firstChunk = false;
           }
           process.stdout.write(delta.content);
@@ -1059,13 +1087,11 @@ Start by checking git status and recent changes, then provide specific, actionab
         toolCalls.push(currentToolCall as ToolCall);
       }
 
-      // Close the response box
+      // End response
       if (fullContent) {
-        console.log();
-        console.log(chalk.cyan('╰──────────────────────────────────────────────────────────────────────╯'));
-      } else if (toolCalls.length > 0) {
-        process.stdout.write('\r' + chalk.cyan('│ ') + chalk.gray('Using tools...') + ' '.repeat(40) + '\n');
-        console.log(chalk.cyan('╰──────────────────────────────────────────────────────────────────────╯'));
+        console.log('\n');
+      } else if (toolCalls.length > 0 && firstChunk) {
+        process.stdout.write('\r' + ' '.repeat(20) + '\r');
       }
 
       // Build the message for history
@@ -1129,58 +1155,34 @@ Start by checking git status and recent changes, then provide specific, actionab
       return;
     }
 
-    // Show execution with beautiful box
-    const toolIcons: Record<string, string> = {
-      Read: '📖', Write: '✏️', Edit: '🔧', Bash: '⚡',
-      Glob: '🔍', Grep: '🔎', WebFetch: '🌐', WebSearch: '🔍'
-    };
-    const toolColors: Record<string, typeof chalk> = {
-      Read: chalk.green, Write: chalk.yellow, Edit: chalk.yellow, Bash: chalk.red,
-      Glob: chalk.green, Grep: chalk.green, WebFetch: chalk.green, WebSearch: chalk.green
-    };
-
-    const icon = toolIcons[name] || '🔧';
-    const color = toolColors[name] || chalk.gray;
-
-    console.log();
-    console.log(color('┌─ ') + chalk.bold(`${icon} ${name}`) + color(' ─────────────────────────────────────────────────'));
-
-    // Show details based on tool type
+    // Simple tool display like Claude Code
+    let toolInfo = '';
     if (name === 'Bash') {
-      console.log(color('│ ') + chalk.gray('$') + ' ' + chalk.white(params.command));
-    } else if (name === 'Read' || name === 'Write' || name === 'Edit') {
-      console.log(color('│ ') + chalk.gray('File:') + ' ' + chalk.cyan(params.file_path as string));
-    } else if (name === 'Glob' || name === 'Grep') {
-      console.log(color('│ ') + chalk.gray('Pattern:') + ' ' + chalk.cyan(params.pattern as string));
+      toolInfo = chalk.dim('$ ') + (params.command as string).slice(0, 60);
+    } else if (name === 'Read') {
+      toolInfo = params.file_path as string;
+    } else if (name === 'Write') {
+      toolInfo = params.file_path as string;
+    } else if (name === 'Edit') {
+      toolInfo = params.file_path as string;
+    } else if (name === 'Glob') {
+      toolInfo = params.pattern as string;
+    } else if (name === 'Grep') {
+      toolInfo = params.pattern as string;
     } else if (name === 'WebFetch') {
-      console.log(color('│ ') + chalk.gray('URL:') + ' ' + chalk.cyan(params.url as string));
+      toolInfo = (params.url as string).slice(0, 50);
     } else if (name === 'WebSearch') {
-      console.log(color('│ ') + chalk.gray('Query:') + ' ' + chalk.cyan(params.query as string));
+      toolInfo = params.query as string;
     }
+
+    console.log(chalk.dim('  ● ') + chalk.cyan(name) + chalk.dim(' ' + toolInfo));
 
     // Execute
     const result = await executeTool(name, params);
 
-    if (result.success) {
-      console.log(color('│'));
-      console.log(color('│ ') + chalk.green('✓ Success'));
-      if (result.output && result.output.length < 500) {
-        const lines = result.output.split('\n').slice(0, 10);
-        for (const line of lines) {
-          console.log(color('│ ') + chalk.gray(line.slice(0, 80)));
-        }
-        if (result.output.split('\n').length > 10) {
-          console.log(color('│ ') + chalk.gray('... (truncated)'));
-        }
-      } else if (result.output) {
-        console.log(color('│ ') + chalk.gray(result.output.slice(0, 200) + '... (truncated)'));
-      }
-    } else {
-      console.log(color('│'));
-      console.log(color('│ ') + chalk.red('✗ Failed: ') + chalk.red(result.error || 'Unknown error'));
+    if (!result.success) {
+      console.log(chalk.red('    ✗ ') + chalk.red(result.error || 'Failed'));
     }
-
-    console.log(color('└──────────────────────────────────────────────────────────────────────'));
 
     this.messages.push({
       role: 'tool',

@@ -13,7 +13,7 @@ interface GrokConfig {
 }
 
 const defaults: Omit<GrokConfig, 'apiKey'> = {
-  model: 'grok-4-0709',
+  model: 'grok-4-1-fast-reasoning',
   temperature: 0.7,
   maxTokens: 16384,
   autoApprove: [],
@@ -77,7 +77,7 @@ export class ConfigManager {
     this.config.set(key, value);
   }
 
-  async setupAuth(): Promise<void> {
+  async setupAuth(): Promise<boolean> {
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -101,20 +101,18 @@ export class ConfigManager {
     console.log(chalk.bold('  Welcome to Grok Code!'));
     console.log();
     console.log(chalk.gray('  To use Grok Code, you need an API key from xAI.'));
-    console.log(chalk.gray('  We\'ll open your browser to the xAI console where you can:'));
     console.log();
-    console.log(chalk.cyan('    1.') + ' Sign in or create an account');
-    console.log(chalk.cyan('    2.') + ' Go to API Keys section');
-    console.log(chalk.cyan('    3.') + ' Create a new API key');
-    console.log(chalk.cyan('    4.') + ' Copy the key and paste it here');
+    console.log(chalk.cyan('  How would you like to authenticate?'));
     console.log();
+    console.log('    ' + chalk.bold.cyan('[1]') + ' Open browser to get API key ' + chalk.gray('(recommended)'));
+    console.log('    ' + chalk.bold.cyan('[2]') + ' Paste API key directly ' + chalk.gray('(if you already have one)'));
+    console.log();
+
+    const choice = await question(chalk.bold.green('❯ ') + 'Choose [1/2]: ');
 
     const xaiUrl = 'https://console.x.ai/';
 
-    // Ask to open browser
-    const openChoice = await question(chalk.bold.green('❯ ') + 'Open xAI Console in browser? [Y/n]: ');
-
-    if (openChoice.toLowerCase() !== 'n') {
+    if (choice.trim() === '1' || choice.trim() === '') {
       console.log();
       console.log(chalk.cyan('  ⏳ Opening browser...'));
 
@@ -137,21 +135,20 @@ export class ConfigManager {
       }
     } else {
       console.log();
-      console.log(chalk.gray(`  Visit: ${chalk.cyan(xaiUrl)}`));
+      console.log(chalk.gray(`  Get your API key from: ${chalk.cyan(xaiUrl)}`));
       console.log();
     }
 
-    // Get API key with masked input visual
-    console.log(chalk.gray('  Paste your API key below (it will be hidden):'));
+    // Get API key
+    console.log(chalk.gray('  Paste your API key below:'));
     console.log();
     const apiKey = await question(chalk.bold.green('❯ ') + 'API Key: ');
 
     if (!apiKey.trim()) {
       console.log();
       console.log(chalk.red('  ✗ API key cannot be empty.'));
-      console.log(chalk.gray('  Run `grok auth` to try again.\n'));
       rl.close();
-      return;
+      return false;
     }
 
     // Validate the key with spinner
@@ -178,9 +175,8 @@ export class ConfigManager {
         console.log(`\r${chalk.red('  ✗ Invalid API key. Please check and try again.')}          `);
         console.log();
         console.log(chalk.gray('  Make sure you copied the complete key starting with "xai-"'));
-        console.log(chalk.gray('  Run `grok auth` to try again.\n'));
         rl.close();
-        return;
+        return false;
       }
 
       // Get available models to show
@@ -197,19 +193,19 @@ export class ConfigManager {
       console.log(chalk.cyan('│') + `                                                                      ` + chalk.cyan('│'));
       console.log(chalk.cyan('│') + `  ${chalk.gray('API Key:')}    ${chalk.green('✓ Saved securely')}                                      ` + chalk.cyan('│'));
       console.log(chalk.cyan('│') + `  ${chalk.gray('Models:')}     ${chalk.cyan(modelCount + ' available')}                                          ` + chalk.cyan('│'));
-      console.log(chalk.cyan('│') + `  ${chalk.gray('Config:')}     ${chalk.blue(this.config.path.slice(0, 45))}...` + chalk.cyan('│'));
-      console.log(chalk.cyan('│') + `                                                                      ` + chalk.cyan('│'));
-      console.log(chalk.cyan('│') + `  ${chalk.bold('Get started:')} ${chalk.cyan('grok')}                                               ` + chalk.cyan('│'));
       console.log(chalk.cyan('╰──────────────────────────────────────────────────────────────────────╯'));
       console.log();
+
+      rl.close();
+      return true;
     } catch (error) {
       clearInterval(spinner);
       console.log(`\r${chalk.red('  ✗ Error validating key: ' + (error as Error).message)}          `);
       console.log();
-      console.log(chalk.gray('  Check your internet connection and try again.\n'));
+      console.log(chalk.gray('  Check your internet connection and try again.'));
+      rl.close();
+      return false;
     }
-
-    rl.close();
   }
 
   async show(): Promise<void> {

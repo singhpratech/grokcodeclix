@@ -4,28 +4,51 @@ import { Command } from 'commander';
 import { GrokChat } from './conversation/chat.js';
 import { ConfigManager } from './config/manager.js';
 import chalk from 'chalk';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+// Get version from package.json
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
 
 const program = new Command();
 
 program
   .name('grok')
   .description('CLI coding assistant powered by Grok AI')
-  .version('0.1.0');
+  .version(packageJson.version);
 
 program
   .command('chat', { isDefault: true })
   .description('Start an interactive chat session')
-  .option('-m, --model <model>', 'Grok model to use', 'grok-4-0709')
+  .option('-m, --model <model>', 'Grok model to use', 'grok-4-1-fast-reasoning')
   .option('-r, --resume [sessionId]', 'Resume a previous conversation')
   .action(async (options) => {
     const config = new ConfigManager();
-    const apiKey = await config.getApiKey();
+    let apiKey = await config.getApiKey();
 
+    // If no API key, run auth flow automatically (don't exit!)
     if (!apiKey) {
-      console.log(chalk.yellow('No API key found. Run `grok auth` to set up your xAI API key.'));
-      process.exit(1);
+      console.log(chalk.yellow('\n  No API key found. Let\'s set one up!\n'));
+      const success = await config.setupAuth();
+
+      if (!success) {
+        console.log(chalk.red('\n  Authentication failed. Please try again with `grok`.\n'));
+        process.exit(1);
+      }
+
+      // Get the newly set API key
+      apiKey = await config.getApiKey();
+
+      if (!apiKey) {
+        console.log(chalk.red('\n  Could not retrieve API key. Please try again.\n'));
+        process.exit(1);
+      }
     }
 
+    // Start chat automatically after auth or if already authenticated
     const chat = new GrokChat({
       apiKey,
       model: options.model,
@@ -44,7 +67,29 @@ program
   .description('Authenticate with xAI API')
   .action(async () => {
     const config = new ConfigManager();
-    await config.setupAuth();
+    const success = await config.setupAuth();
+
+    if (success) {
+      // After successful auth, ask if they want to start chatting
+      const readline = await import('readline');
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+
+      const answer = await new Promise<string>((resolve) => {
+        rl.question(chalk.bold.green('❯ ') + 'Start chatting now? [Y/n]: ', resolve);
+      });
+      rl.close();
+
+      if (answer.toLowerCase() !== 'n') {
+        const apiKey = await config.getApiKey();
+        if (apiKey) {
+          const chat = new GrokChat({ apiKey });
+          await chat.start();
+        }
+      }
+    }
   });
 
 program
