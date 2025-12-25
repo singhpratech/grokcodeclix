@@ -23,8 +23,8 @@ npm install -g grokcodecli
 Or install from source:
 
 ```bash
-git clone https://github.com/singhpratech/grokcodecli.git
-cd grokcodecli
+git clone https://github.com/singhpratech/grokcodeclix.git
+cd grokcodeclix
 npm install
 npm run build
 npm link
