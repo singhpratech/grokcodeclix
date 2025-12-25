@@ -1036,8 +1036,10 @@ Start by checking git status and recent changes, then provide specific, actionab
   }
 
   private async getStreamingResponse(): Promise<void> {
-    // Simple thinking indicator like Claude Code
-    process.stdout.write('\n' + chalk.dim('  Thinking...'));
+    // Show appropriate indicator based on model type
+    const isReasoning = this.client.model.includes('reasoning') && !this.client.model.includes('non-reasoning');
+    const indicator = isReasoning ? 'Thinking...' : '';
+    process.stdout.write('\n' + chalk.dim(`  ${indicator}`));
 
     let fullContent = '';
     let toolCalls: ToolCall[] = [];
