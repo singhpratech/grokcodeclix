@@ -114,30 +114,68 @@ npm link
 
 ### Setup
 
-#### Step 1: Get Your API Key
+#### Quick Start (Recommended)
 
-Visit [xAI Console](https://console.x.ai/) to create an account and generate your API key.
+Just run the auth command - it will guide you through everything:
 
-#### Step 2: Configure Authentication
-
-**Option A: Interactive Setup**
 ```bash
 grok auth
 ```
 
-**Option B: Environment Variable**
+This will:
+1. Open your browser to xAI Console
+2. Guide you through creating an API key
+3. Validate and save your key securely
+
+```
+╭──────────────────────────────────────────────────────────────────────╮
+│  🔐 Grok Code CLI - Authentication                                   │
+╰──────────────────────────────────────────────────────────────────────╯
+
+  Welcome to Grok Code!
+
+  To use Grok Code, you need an API key from xAI.
+  We'll open your browser to the xAI console where you can:
+
+    1. Sign in or create an account
+    2. Go to API Keys section
+    3. Create a new API key
+    4. Copy the key and paste it here
+
+❯ Open xAI Console in browser? [Y/n]: Y
+
+  ⏳ Opening browser...
+  ✓ Browser opened!
+
+  ─────────────────────────────────────────────────────────────────
+  Follow these steps in the browser:
+  1. Sign in to your xAI account
+  2. Click on "API Keys" in the sidebar
+  3. Click "Create API Key"
+  4. Copy the key (starts with "xai-")
+  ─────────────────────────────────────────────────────────────────
+
+❯ API Key: xai-••••••••••••••••••••
+
+  ✓ API key validated!
+
+╭──────────────────────────────────────────────────────────────────────╮
+│  🎉 Authentication Successful!                                       │
+│                                                                      │
+│  API Key:    ✓ Saved securely                                       │
+│  Models:     10 available                                           │
+│  Get started: grok                                                  │
+╰──────────────────────────────────────────────────────────────────────╯
+```
+
+#### Alternative: Environment Variable
+
 ```bash
 # Add to your shell profile (~/.bashrc, ~/.zshrc, etc.)
 export XAI_API_KEY=your_api_key_here
 ```
 
-**Option C: Config File**
-```bash
-mkdir -p ~/.config/grokcodecli
-echo '{"apiKey": "your_api_key_here"}' > ~/.config/grokcodecli/config.json
-```
-
-#### Step 3: Start Coding
+#### Start Coding
 
 ```bash
 grok
