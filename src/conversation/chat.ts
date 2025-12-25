@@ -193,18 +193,18 @@ export class GrokChat {
   }
 
   private async loop(): Promise<void> {
-    const prompt = chalk.bold.green('❯ ');
-
-    const question = (): Promise<string> => {
+    const showPrompt = (): Promise<string> => {
       return new Promise((resolve) => {
-        this.rl.question(prompt, (answer) => {
+        // Two-line input like Claude Code
+        console.log(chalk.dim('─'.repeat(50)));
+        this.rl.question(chalk.bold.green('❯ '), (answer) => {
           resolve(answer);
         });
       });
     };
 
     while (true) {
-      const input = await question();
+      const input = await showPrompt();
       const trimmed = input.trim();
 
       if (!trimmed) continue;
