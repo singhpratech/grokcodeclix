@@ -5,7 +5,8 @@ import chalk from 'chalk';
 import { renderMarkdown } from './dist/utils/markdown.js';
 import { computeDiff, renderDiff, formatDiffSummary } from './dist/utils/diff.js';
 
-const ORANGE = chalk.hex('#d97757');
+const SAFFRON = chalk.hex('#FF9933');
+const INDIA_GREEN = chalk.hex('#138808');
 
 console.log();
 console.log(chalk.bold('━━━ Welcome banner (Claude Code style) ━━━'));
@@ -22,13 +23,15 @@ const line = (text) => {
 };
 const blank = line('');
 
+const tricolor = SAFFRON('✻') + ' ' + chalk.white('✻') + ' ' + INDIA_GREEN('✻');
+
 console.log(top);
-console.log(line(ORANGE('✻') + ' ' + chalk.bold('Welcome to Grok Code!')));
+console.log(line(tricolor + '  ' + chalk.bold('Welcome to Grok Code!')));
 console.log(blank);
 console.log(line(chalk.dim('  /help for help, /status for your current setup')));
 console.log(blank);
 console.log(line(chalk.dim('  cwd: ') + '~/Documents/grokcodeclix'));
-console.log(line(chalk.dim('  ✓ GROK.md loaded')));
+console.log(line(chalk.dim('  ') + INDIA_GREEN('✓') + chalk.dim(' GROK.md loaded')));
 console.log(bot);
 console.log();
 
@@ -42,18 +45,18 @@ console.log();
 console.log();
 console.log(chalk.bold('━━━ Thinking indicator ━━━'));
 console.log();
-console.log(ORANGE('✻') + ' ' + chalk.dim('Thinking…'));
+console.log(SAFFRON('✻') + ' ' + chalk.dim('Thinking…'));
 console.log();
 
 console.log();
 console.log(chalk.bold('━━━ Tool call display ━━━'));
 console.log();
 
-console.log(ORANGE('● ') + chalk.bold('Read') + chalk.dim('(') + chalk.white('src/server.ts') + chalk.dim(')'));
+console.log(SAFFRON('● ') + chalk.bold('Read') + chalk.dim('(') + chalk.white('src/server.ts') + chalk.dim(')'));
 console.log('  ' + chalk.dim('⎿  ') + chalk.dim('Read 12 lines from src/server.ts'));
 console.log();
 
-console.log(ORANGE('● ') + chalk.bold('Edit') + chalk.dim('(') + chalk.white('src/server.ts') + chalk.dim(')'));
+console.log(SAFFRON('● ') + chalk.bold('Edit') + chalk.dim('(') + chalk.white('src/server.ts') + chalk.dim(')'));
 
 const before = `import express from 'express';
 
@@ -80,7 +83,7 @@ console.log('  ' + chalk.dim('⎿  ') + `Updated src/server.ts with ${formatDiff
 console.log(renderDiff(diff, 30, 1));
 console.log();
 
-console.log(ORANGE('● ') + chalk.bold('Bash') + chalk.dim('(') + chalk.white('npm install express') + chalk.dim(')'));
+console.log(SAFFRON('● ') + chalk.bold('Bash') + chalk.dim('(') + chalk.white('npm install express') + chalk.dim(')'));
 console.log('  ' + chalk.dim('⎿  ') + chalk.dim('5 lines of output'));
 console.log('  ' + chalk.dim('│ ') + 'added 64 packages in 2s');
 console.log('  ' + chalk.dim('│ '));
@@ -88,14 +91,14 @@ console.log('  ' + chalk.dim('│ ') + '12 packages are looking for funding');
 console.log('  ' + chalk.dim('│ ') + '  run `npm fund` for details');
 console.log();
 
-console.log(ORANGE('● ') + chalk.bold('Grep') + chalk.dim('(') + chalk.white('TODO|FIXME') + chalk.dim(')'));
+console.log(SAFFRON('● ') + chalk.bold('Grep') + chalk.dim('(') + chalk.white('TODO|FIXME') + chalk.dim(')'));
 console.log('  ' + chalk.dim('⎿  ') + chalk.dim('3 match(es)'));
 console.log();
 
 console.log();
 console.log(chalk.bold('━━━ Permission prompt ━━━'));
 console.log();
-console.log(ORANGE('● ') + chalk.bold('Bash') + chalk.dim('(') + chalk.white('npm install express') + chalk.dim(')'));
+console.log(SAFFRON('● ') + chalk.bold('Bash') + chalk.dim('(') + chalk.white('npm install express') + chalk.dim(')'));
 console.log();
 console.log('  ' + chalk.bold('Do you want to run this command?'));
 console.log(chalk.cyan('❯ ') + chalk.cyan.bold('1. Yes'));

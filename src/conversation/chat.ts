@@ -34,8 +34,12 @@ const packageJson = JSON.parse(readFileSync(path.join(__dirname, '..', '..', 'pa
 
 const VERSION = packageJson.version;
 
-// Claude Code signature orange/amber used for the ● tool-call marker and ✻ welcome star.
-const GROK_ORANGE = chalk.hex('#d97757');
+// Tiranga palette — saffron / white / green from the Indian flag.
+// Saffron is the primary accent (tool-call ●, welcome ✻, spinner).
+// Green is the success/additions color (also used by the diff renderer).
+// White is for bold emphasis.
+const SAFFRON = chalk.hex('#FF9933');
+const INDIA_GREEN = chalk.hex('#138808');
 
 function buildSystemPrompt(cwd: string, workingDirs: string[], projectContext: string): string {
   const dirList = workingDirs.length > 1
@@ -377,11 +381,12 @@ export class GrokChat {
     const blank = line('');
 
     const cwd = process.cwd().replace(os.homedir(), '~');
-    const star = GROK_ORANGE('✻');
+    // Tri-color star row: saffron, white, green — tiranga accent.
+    const tricolor = SAFFRON('✻') + ' ' + chalk.white('✻') + ' ' + INDIA_GREEN('✻');
 
     console.log();
     console.log(top);
-    console.log(line(star + ' ' + chalk.bold(`Welcome to Grok Code!`)));
+    console.log(line(tricolor + '  ' + chalk.bold('Welcome to Grok Code!')));
     console.log(blank);
     console.log(line(chalk.dim('  /help for help, /status for your current setup')));
     console.log(blank);
@@ -391,10 +396,10 @@ export class GrokChat {
       console.log(line(chalk.dim('  resumed: ') + chalk.yellow(resumedTitle)));
     }
     if (this.projectContext) {
-      console.log(line(chalk.dim('  ') + chalk.dim('✓ GROK.md loaded')));
+      console.log(line(chalk.dim('  ') + INDIA_GREEN('✓') + chalk.dim(' GROK.md loaded')));
     }
     if (this.customCommands.length > 0) {
-      console.log(line(chalk.dim(`  ✓ ${this.customCommands.length} custom command${this.customCommands.length === 1 ? '' : 's'}`)));
+      console.log(line(chalk.dim('  ') + INDIA_GREEN('✓') + chalk.dim(` ${this.customCommands.length} custom command${this.customCommands.length === 1 ? '' : 's'}`)));
     }
     console.log(bot);
     console.log();
@@ -1560,7 +1565,7 @@ Provide specific, actionable feedback.`;
       return;
     }
 
-    console.log(GROK_ORANGE('● ') + chalk.bold(name) + chalk.dim('(') + invocation + chalk.dim(')'));
+    console.log(SAFFRON('● ') + chalk.bold(name) + chalk.dim('(') + invocation + chalk.dim(')'));
 
 
     // Execute with a spinner for slow tools
@@ -1707,7 +1712,7 @@ function startSpinner(label: string, indent: string = ''): { stop: () => void } 
   let i = 0;
   let stopped = false;
   const write = (frame: string) => {
-    process.stdout.write(`\r${indent}${GROK_ORANGE(frame)} ${chalk.dim(label)}`);
+    process.stdout.write(`\r${indent}${SAFFRON(frame)} ${chalk.dim(label)}`);
   };
   write(frames[0]);
   const timer = setInterval(() => {

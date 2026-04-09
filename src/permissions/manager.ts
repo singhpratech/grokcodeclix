@@ -2,8 +2,8 @@ import * as readline from 'readline';
 import chalk from 'chalk';
 import { interactiveSelect, SelectorOption } from '../utils/selector.js';
 
-// Match Claude Code's signature orange accent color.
-const ORANGE = chalk.hex('#d97757');
+// Tiranga saffron accent color (matches chat.ts SAFFRON).
+const SAFFRON = chalk.hex('#FF9933');
 
 export type ToolRiskLevel = 'read' | 'write' | 'execute';
 
@@ -115,7 +115,7 @@ export class PermissionManager {
     const question = this.questionForTool(tool);
 
     console.log();
-    console.log(ORANGE('● ') + chalk.bold(tool) + chalk.dim('(') + chalk.white(invocation) + chalk.dim(')'));
+    console.log(SAFFRON('● ') + chalk.bold(tool) + chalk.dim('(') + chalk.white(invocation) + chalk.dim(')'));
     console.log();
     console.log('  ' + chalk.bold(question));
 
