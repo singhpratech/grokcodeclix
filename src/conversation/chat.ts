@@ -270,13 +270,19 @@ export class GrokChat {
           return;
         }
 
-        // Live slash-command popup: after each keystroke, if the line
-        // starts with '/', show matching commands dimmed below the prompt.
-        // We use a simple single-line footer that gets rewritten in place.
-        if (this.rl.line.startsWith('/') && !key.ctrl) {
-          this.updateSlashPopup();
-        } else if (this.slashPopupActive) {
-          this.clearSlashPopup();
+        // Live slash-command popup — IMPORTANT: keypress events fire
+        // BEFORE readline updates rl.line with the new character, so
+        // we have to defer the check to the next microtask to read
+        // the updated line.
+        if (!key.ctrl) {
+          setImmediate(() => {
+            const current = this.rl.line ?? '';
+            if (current.startsWith('/')) {
+              this.updateSlashPopup();
+            } else if (this.slashPopupActive) {
+              this.clearSlashPopup();
+            }
+          });
         }
       });
     }
@@ -323,8 +329,7 @@ export class GrokChat {
     this.thinkingMode = !this.thinkingMode;
     const newModel = this.getCurrentModel();
     this.client = new GrokClient(this.apiKey, newModel);
-    const modeLabel = this.thinkingMode ? chalk.cyan('🧠 Thinking') : chalk.yellow('⚡ Fast');
-    console.log(chalk.dim('  Mode: ') + modeLabel + chalk.dim(` (${newModel})`));
+    this.announceModelChange(newModel);
   }
 
   // Claude Code-style memory hierarchy:
@@ -531,18 +536,24 @@ export class GrokChat {
   private async loop(): Promise<void> {
     const showPrompt = (): Promise<string> => {
       return new Promise((resolve) => {
+        // Build the status-line footer shown above the prompt.
+        // Always shows the current model. Badges for plan mode, fast
+        // mode, and attached images appear inline when active.
+        const modeIcon = this.thinkingMode ? '🧠' : '⚡';
+        const modelBit = chalk.dim(`${modeIcon} `) + chalk.white(this.client.model);
+
         const badges: string[] = [];
-        if (this.planMode) badges.push(chalk.yellow('plan mode'));
-        if (!this.thinkingMode) badges.push(chalk.dim('fast mode'));
+        if (this.planMode) badges.push(chalk.yellow('plan'));
         if (this.pending.images.length > 0) {
           const n = this.pending.images.length;
-          badges.push(chalk.magenta(`${n} image${n === 1 ? '' : 's'} attached`));
+          badges.push(chalk.magenta(`${n} img`));
         }
-        const footer =
-          badges.length > 0
-            ? chalk.dim('  ') + badges.join(chalk.dim(' · ')) + chalk.dim(' · ? for shortcuts')
-            : chalk.dim('  ? for shortcuts');
 
+        const parts = [modelBit];
+        if (badges.length > 0) parts.push(badges.join(chalk.dim(' · ')));
+        parts.push(chalk.dim('? for shortcuts'));
+
+        const footer = chalk.dim('  ') + parts.join(chalk.dim(' · '));
         console.log(footer);
         this.rl.question(chalk.dim('> '), (answer) => {
           this.clearSlashPopup();
@@ -1024,7 +1035,7 @@ export class GrokChat {
 
       this.parseModelMode(matchedModel);
       this.client = new GrokClient(this.apiKey, matchedModel);
-      console.log(chalk.dim(`  ✓ Switched to ${matchedModel}`));
+      this.announceModelChange(matchedModel);
       return;
     }
 
@@ -1057,10 +1068,28 @@ export class GrokChat {
     if (selected && selected !== this.client.model) {
       this.parseModelMode(selected);
       this.client = new GrokClient(this.apiKey, selected);
-      console.log(chalk.dim(`  ✓ Switched to ${selected}`));
+      this.announceModelChange(selected);
     } else if (!selected) {
       console.log(chalk.dim('  Cancelled.'));
     }
+  }
+
+  /**
+   * Show a prominent Claude Code-style acknowledgement when the active
+   * model changes — matches the visual weight of a tool-call header so
+   * the user can't miss it.
+   */
+  private announceModelChange(model: string): void {
+    const modeIcon = this.thinkingMode ? '🧠' : '⚡';
+    const modeLabel = this.thinkingMode ? 'thinking' : 'fast';
+    console.log();
+    console.log(
+      SAFFRON('✦ ') +
+      chalk.bold('Model set to ') +
+      chalk.white(model) +
+      chalk.dim(`  (${modeIcon} ${modeLabel} mode)`)
+    );
+    console.log();
   }
 
   private handlePermissions(): void {
@@ -1756,11 +1785,13 @@ Provide specific, actionable feedback.`;
 
   /**
    * Paint a popup of matching slash commands below the current input line.
-   * Called on every keystroke while the input starts with '/'.
+   * Called on every keystroke (via setImmediate) while the input starts
+   * with '/'. Uses ANSI save/restore cursor escapes to avoid disturbing
+   * readline's internal cursor tracking.
    */
   private updateSlashPopup(): void {
     if (!process.stdout.isTTY) return;
-    const line = this.rl.line;
+    const line = this.rl.line ?? '';
     if (!line.startsWith('/')) {
       this.clearSlashPopup();
       return;
@@ -1774,32 +1805,36 @@ Provide specific, actionable feedback.`;
       ]),
     ];
 
-    const matches = all.filter(([cmd]) => cmd.toLowerCase().startsWith(line.toLowerCase()));
-    const display = matches.slice(0, 7); // cap popup height
+    const query = line.toLowerCase();
+    const matches = all.filter(([cmd]) => cmd.toLowerCase().startsWith(query));
+    const display = matches.slice(0, 8); // cap popup height
 
-    // Always clear previous popup first
+    // Clear the previous popup before drawing a new one.
     this.clearSlashPopup();
 
     if (display.length === 0) return;
 
-    // Save cursor position, draw popup below, restore cursor.
+    const overflow = matches.length > display.length;
     const out = process.stdout;
-    out.write('\x1B[s'); // save cursor
 
+    // Save cursor, draw popup below, restore. These are ANSI escapes
+    // that the terminal handles — readline doesn't know about them
+    // and its internal state stays correct.
+    out.write('\x1B7'); // DECSC — save cursor (more widely supported than ESC[s)
+
+    let drawn = 0;
     for (const [cmd, desc] of display) {
-      out.write('\n\x1B[2K'); // newline + clear line
-      const pad = cmd.padEnd(16);
-      out.write(chalk.dim('  ') + chalk.cyan(pad) + '  ' + chalk.dim(desc));
+      out.write('\n\x1B[2K' + chalk.dim('  ') + chalk.cyan(cmd.padEnd(16)) + '  ' + chalk.dim(desc));
+      drawn++;
     }
-    if (matches.length > display.length) {
-      out.write('\n\x1B[2K');
-      out.write(chalk.dim(`  … (+${matches.length - display.length} more — keep typing)`));
-      this.slashPopupLines = display.length + 1;
-    } else {
-      this.slashPopupLines = display.length;
+    if (overflow) {
+      out.write('\n\x1B[2K' + chalk.dim(`  … (+${matches.length - display.length} more)`));
+      drawn++;
     }
 
-    out.write('\x1B[u'); // restore cursor
+    out.write('\x1B8'); // DECRC — restore cursor
+
+    this.slashPopupLines = drawn;
     this.slashPopupActive = true;
   }
 
@@ -1810,12 +1845,14 @@ Provide specific, actionable feedback.`;
       this.slashPopupLines = 0;
       return;
     }
+
     const out = process.stdout;
-    out.write('\x1B[s'); // save cursor
+    out.write('\x1B7'); // save
     for (let i = 0; i < this.slashPopupLines; i++) {
       out.write('\n\x1B[2K');
     }
-    out.write('\x1B[u'); // restore cursor
+    out.write('\x1B8'); // restore
+
     this.slashPopupActive = false;
     this.slashPopupLines = 0;
   }
