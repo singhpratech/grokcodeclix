@@ -156,7 +156,8 @@ export function renderMarkdown(markdown: string): string {
   while (i < lines.length) {
     const line = lines[i];
 
-    // Fenced code block
+    // Fenced code block — Claude Code style: no box, just dim two-space indent
+    // and highlighted code. An optional language label is shown dim above.
     const fenceMatch = line.match(/^(\s*)```(\w*)\s*$/);
     if (fenceMatch) {
       const indent = fenceMatch[1];
@@ -171,14 +172,12 @@ export function renderMarkdown(markdown: string): string {
 
       const code = codeLines.join('\n');
       const highlighted = highlightCode(lang, code);
-      const langLabel = lang ? chalk.dim(` ${lang}`) : '';
 
-      // Render as a dim-bordered block
-      out.push(indent + chalk.dim('┌─' + langLabel));
+      out.push('');
       for (const cl of highlighted.split('\n')) {
-        out.push(indent + chalk.dim('│ ') + cl);
+        out.push(indent + '  ' + cl);
       }
-      out.push(indent + chalk.dim('└─'));
+      out.push('');
       continue;
     }
 

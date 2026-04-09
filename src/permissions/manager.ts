@@ -2,6 +2,9 @@ import * as readline from 'readline';
 import chalk from 'chalk';
 import { interactiveSelect, SelectorOption } from '../utils/selector.js';
 
+// Match Claude Code's signature orange accent color.
+const ORANGE = chalk.hex('#d97757');
+
 export type ToolRiskLevel = 'read' | 'write' | 'execute';
 
 export interface PermissionRequest {
@@ -97,52 +100,85 @@ export class PermissionManager {
   }
 
   private async promptUser(request: PermissionRequest): Promise<boolean> {
-    const { tool, description, riskLevel, details } = request;
-    const color = RISK_COLORS[riskLevel];
-    const icon = RISK_ICONS[riskLevel];
+    const { tool, details } = request;
 
-    // Show what's being requested
+    // Claude Code-style permission block:
+    //
+    //   ● Tool(args)
+    //
+    //   Do you want to proceed?
+    //   ❯ 1. Yes
+    //     2. Yes, and don't ask again for this tool
+    //     3. No, and tell me what to do differently (esc)
+    //
+    const invocation = this.formatInvocationForPrompt(tool, details || {});
+    const question = this.questionForTool(tool);
+
     console.log();
-    console.log(`  ${icon} ${color(tool)} ${chalk.dim('-')} ${description}`);
-    if (details) {
-      for (const [key, value] of Object.entries(details)) {
-        const valueStr = typeof value === 'string'
-          ? value.length > 50 ? value.slice(0, 47) + '...' : value
-          : String(value);
-        console.log(chalk.dim(`     ${key}: ${valueStr}`));
-      }
-    }
+    console.log(ORANGE('● ') + chalk.bold(tool) + chalk.dim('(') + chalk.white(invocation) + chalk.dim(')'));
     console.log();
+    console.log('  ' + chalk.bold(question));
 
     const options: SelectorOption[] = [
-      { label: 'Allow once', value: 'once', description: 'permit this action' },
-      { label: 'Allow session', value: 'session', description: 'permit for session' },
-      { label: 'Deny', value: 'deny', description: 'reject this action' },
-      { label: 'Block', value: 'block', description: 'block tool for session' },
+      { label: '1. Yes', value: 'once' },
+      { label: `2. Yes, and don't ask again this session`, value: 'session' },
+      { label: '3. No, and tell Grok what to do differently', value: 'deny', description: 'esc' },
     ];
 
-    const choice = await interactiveSelect('Permission:', options);
+    const choice = await interactiveSelect('', options);
 
     switch (choice) {
       case 'once':
         return true;
-
       case 'session':
         this.config.sessionApproved.add(this.getSessionKey(tool, details));
-        console.log(chalk.dim(`  ✓ ${tool} approved for session`));
         return true;
-
       case 'deny':
       case null:
         return false;
-
-      case 'block':
-        this.config.alwaysDeny.push(tool);
-        console.log(chalk.dim(`  ⛔ ${tool} blocked for session`));
-        return false;
-
       default:
         return false;
+    }
+  }
+
+  private formatInvocationForPrompt(tool: string, params: Record<string, unknown>): string {
+    const truncate = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+    switch (tool) {
+      case 'Read':
+      case 'Write':
+      case 'Edit':
+        return truncate(String(params.file_path || ''), 70);
+      case 'Bash':
+        return truncate(String(params.command || ''), 70);
+      case 'Glob':
+        return truncate(String(params.pattern || ''), 70);
+      case 'Grep':
+        return truncate(String(params.pattern || ''), 70);
+      case 'WebFetch':
+        return truncate(String(params.url || ''), 70);
+      case 'WebSearch':
+        return truncate(String(params.query || ''), 70);
+      default:
+        return truncate(JSON.stringify(params), 70);
+    }
+  }
+
+  private questionForTool(tool: string): string {
+    switch (tool) {
+      case 'Read':
+      case 'Glob':
+      case 'Grep':
+      case 'WebFetch':
+      case 'WebSearch':
+        return 'Do you want to proceed?';
+      case 'Write':
+        return 'Do you want to create/overwrite this file?';
+      case 'Edit':
+        return 'Do you want to make this edit?';
+      case 'Bash':
+        return 'Do you want to run this command?';
+      default:
+        return 'Do you want to proceed?';
     }
   }
 

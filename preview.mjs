@@ -1,91 +1,59 @@
 #!/usr/bin/env node
 // Visual preview of Grok Code's UI output — no API key needed.
+// Run: FORCE_COLOR=1 node preview.mjs
 import chalk from 'chalk';
 import { renderMarkdown } from './dist/utils/markdown.js';
 import { computeDiff, renderDiff, formatDiffSummary } from './dist/utils/diff.js';
 
+const ORANGE = chalk.hex('#d97757');
+
 console.log();
-console.log(chalk.bold.cyan('━━━ Welcome banner ━━━'));
+console.log(chalk.bold('━━━ Welcome banner (Claude Code style) ━━━'));
 console.log();
 
-const width = 72;
-const top = '╭' + '─'.repeat(width - 2) + '╮';
-const bot = '╰' + '─'.repeat(width - 2) + '╯';
-const mid = (text) => {
+const width = 62;
+const innerWidth = width - 4;
+const top = chalk.dim('╭' + '─'.repeat(width - 2) + '╮');
+const bot = chalk.dim('╰' + '─'.repeat(width - 2) + '╯');
+const line = (text) => {
   const visible = text.replace(/\x1B\[[0-9;]*m/g, '');
-  const pad = Math.max(0, width - 2 - visible.length);
-  return chalk.cyan('│') + text + ' '.repeat(pad) + chalk.cyan('│');
+  const pad = Math.max(0, innerWidth - visible.length);
+  return chalk.dim('│ ') + text + ' '.repeat(pad) + chalk.dim(' │');
 };
+const blank = line('');
 
-console.log(chalk.cyan(top));
-console.log(mid(chalk.bold.white('  ✦ Grok Code ') + chalk.dim('v0.1.21')));
-console.log(mid(''));
-console.log(mid(chalk.dim('  Model:  ') + chalk.white('grok-4-1-fast-reasoning') + chalk.dim(' 🧠 Thinking')));
-console.log(mid(chalk.dim('  CWD:    ') + chalk.white('~/Documents/grokcodeclix')));
-console.log(mid(chalk.dim('  Tools:  ') + chalk.white('8 available') + chalk.dim(' — Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch')));
-console.log(mid(chalk.dim('  Context: ') + chalk.white('GROK.md loaded')));
-console.log(mid(''));
-console.log(mid(chalk.dim('  /help for commands · Tab: toggle mode · Esc: stop · Ctrl+C: exit')));
-console.log(chalk.cyan(bot));
+console.log(top);
+console.log(line(ORANGE('✻') + ' ' + chalk.bold('Welcome to Grok Code!')));
+console.log(blank);
+console.log(line(chalk.dim('  /help for help, /status for your current setup')));
+console.log(blank);
+console.log(line(chalk.dim('  cwd: ') + '~/Documents/grokcodeclix'));
+console.log(line(chalk.dim('  ✓ GROK.md loaded')));
+console.log(bot);
 console.log();
 
 console.log();
-console.log(chalk.bold.cyan('━━━ Markdown rendering sample ━━━'));
+console.log(chalk.bold('━━━ Input prompt ━━━'));
+console.log();
+console.log(chalk.dim('  ? for shortcuts'));
+console.log(chalk.dim('> ') + 'help me refactor this file');
 console.log();
 
-const sample = `# Building a REST API with Express
-
-Here's a quick guide to wire up a basic Express server.
-
-## Install dependencies
-
-First, add the required packages:
-
-\`\`\`bash
-npm install express
-npm install -D @types/express typescript
-\`\`\`
-
-## Create the server
-
-Add this to \`src/server.ts\`:
-
-\`\`\`ts
-import express from 'express';
-
-const app = express();
-app.use(express.json());
-
-app.get('/api/users', (req, res) => {
-  res.json({ users: [] });
-});
-
-app.listen(3000, () => {
-  console.log('Server running on :3000');
-});
-\`\`\`
-
-## Key points
-
-- Always validate **user input** before using it
-- Use *middleware* for cross-cutting concerns
-- Add \`helmet\` and \`cors\` for production
-- Check out [Express docs](https://expressjs.com) for more
-
-> Remember: never trust data from the client.
-`;
-
-console.log(renderMarkdown(sample));
-
 console.log();
-console.log(chalk.bold.cyan('━━━ Tool execution display sample ━━━'));
+console.log(chalk.bold('━━━ Thinking indicator ━━━'));
+console.log();
+console.log(ORANGE('✻') + ' ' + chalk.dim('Thinking…'));
 console.log();
 
-console.log(chalk.green('  ● ') + chalk.bold('Read') + chalk.dim('(') + chalk.white('src/server.ts') + chalk.dim(')'));
-console.log(chalk.dim('    ⎿ ') + chalk.dim('Read 12 lines from src/server.ts'));
+console.log();
+console.log(chalk.bold('━━━ Tool call display ━━━'));
 console.log();
 
-console.log(chalk.green('  ● ') + chalk.bold('Edit') + chalk.dim('(') + chalk.white('src/server.ts') + chalk.dim(')'));
+console.log(ORANGE('● ') + chalk.bold('Read') + chalk.dim('(') + chalk.white('src/server.ts') + chalk.dim(')'));
+console.log('  ' + chalk.dim('⎿  ') + chalk.dim('Read 12 lines from src/server.ts'));
+console.log();
+
+console.log(ORANGE('● ') + chalk.bold('Edit') + chalk.dim('(') + chalk.white('src/server.ts') + chalk.dim(')'));
 
 const before = `import express from 'express';
 
@@ -94,10 +62,6 @@ app.use(express.json());
 
 app.get('/api/users', (req, res) => {
   res.json({ users: [] });
-});
-
-app.listen(3000, () => {
-  console.log('Server running on :3000');
 });`;
 
 const after = `import express from 'express';
@@ -109,51 +73,71 @@ app.use(helmet());
 
 app.get('/api/users', (req, res) => {
   res.json({ users: [] });
-});
-
-app.listen(3000, () => {
-  console.log('Server running on :3000');
 });`;
 
 const diff = computeDiff(before, after);
-console.log(chalk.dim('    ⎿ ') + `Updated src/server.ts with ${formatDiffSummary(diff)}`);
+console.log('  ' + chalk.dim('⎿  ') + `Updated src/server.ts with ${formatDiffSummary(diff)}`);
 console.log(renderDiff(diff, 30, 1));
 console.log();
 
-console.log(chalk.green('  ● ') + chalk.bold('Bash') + chalk.dim('(') + chalk.white('npm install express') + chalk.dim(')'));
-console.log(chalk.dim('    ⎿ ') + chalk.dim('5 lines of output'));
-console.log(chalk.dim('    │ ') + 'added 64 packages in 2s');
-console.log(chalk.dim('    │ '));
-console.log(chalk.dim('    │ ') + '12 packages are looking for funding');
-console.log(chalk.dim('    │ ') + '  run `npm fund` for details');
-console.log(chalk.dim('    │ '));
+console.log(ORANGE('● ') + chalk.bold('Bash') + chalk.dim('(') + chalk.white('npm install express') + chalk.dim(')'));
+console.log('  ' + chalk.dim('⎿  ') + chalk.dim('5 lines of output'));
+console.log('  ' + chalk.dim('│ ') + 'added 64 packages in 2s');
+console.log('  ' + chalk.dim('│ '));
+console.log('  ' + chalk.dim('│ ') + '12 packages are looking for funding');
+console.log('  ' + chalk.dim('│ ') + '  run `npm fund` for details');
 console.log();
 
-console.log(chalk.green('  ● ') + chalk.bold('Grep') + chalk.dim('(') + chalk.white('TODO') + chalk.dim(')'));
-console.log(chalk.dim('    ⎿ ') + chalk.dim('3 match(es)'));
-console.log();
-
-console.log(chalk.green('  ● ') + chalk.bold('WebSearch') + chalk.dim('(') + chalk.white('express middleware best practices') + chalk.dim(')'));
-console.log(chalk.dim('    ⎿ ') + chalk.dim('results returned'));
+console.log(ORANGE('● ') + chalk.bold('Grep') + chalk.dim('(') + chalk.white('TODO|FIXME') + chalk.dim(')'));
+console.log('  ' + chalk.dim('⎿  ') + chalk.dim('3 match(es)'));
 console.log();
 
 console.log();
-console.log(chalk.bold.cyan('━━━ Permission prompt sample ━━━'));
+console.log(chalk.bold('━━━ Permission prompt ━━━'));
 console.log();
-console.log('  ⚡ ' + chalk.red('Bash') + chalk.dim(' — Execute command: npm install express'));
-console.log(chalk.dim('     command: npm install express'));
+console.log(ORANGE('● ') + chalk.bold('Bash') + chalk.dim('(') + chalk.white('npm install express') + chalk.dim(')'));
 console.log();
-console.log(chalk.bold('Permission:'));
-console.log(chalk.dim('↑↓/Tab to navigate, Enter to select, Esc to cancel'));
-console.log(chalk.cyan('❯ ') + chalk.cyan.bold('Allow once') + chalk.dim(' - permit this action'));
-console.log('  Allow session' + chalk.dim(' - permit for session'));
-console.log('  Deny' + chalk.dim(' - reject this action'));
-console.log('  Block' + chalk.dim(' - block tool for session'));
+console.log('  ' + chalk.bold('Do you want to run this command?'));
+console.log(chalk.cyan('❯ ') + chalk.cyan.bold('1. Yes'));
+console.log('  ' + "2. Yes, and don't ask again this session");
+console.log('  ' + '3. No, and tell Grok what to do differently ' + chalk.dim('(esc)'));
 console.log();
 
 console.log();
-console.log(chalk.bold.cyan('━━━ Prompt bar sample ━━━'));
+console.log(chalk.bold('━━━ Markdown response ━━━'));
 console.log();
-console.log(chalk.dim('─'.repeat(60)));
-console.log(chalk.bold.cyan('🧠 ❯ ') + chalk.dim('(type your message, /help for commands)'));
+
+const sample = `# Express REST API
+
+Here's a quick Express server with a users endpoint.
+
+## Install
+
+\`\`\`bash
+npm install express
+\`\`\`
+
+## Code
+
+Create \`src/server.ts\`:
+
+\`\`\`ts
+import express from 'express';
+
+const app = express();
+app.get('/users', (req, res) => {
+  res.json({ users: [] });
+});
+
+app.listen(3000);
+\`\`\`
+
+## Notes
+
+- Always validate **user input**
+- Use *middleware* like \`helmet\` for security
+- See [Express docs](https://expressjs.com) for more
+`;
+
+console.log(renderMarkdown(sample));
 console.log();

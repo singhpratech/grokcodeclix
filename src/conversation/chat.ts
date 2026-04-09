@@ -34,6 +34,9 @@ const packageJson = JSON.parse(readFileSync(path.join(__dirname, '..', '..', 'pa
 
 const VERSION = packageJson.version;
 
+// Claude Code signature orange/amber used for the ● tool-call marker and ✻ welcome star.
+const GROK_ORANGE = chalk.hex('#d97757');
+
 function buildSystemPrompt(cwd: string, workingDirs: string[], projectContext: string): string {
   const dirList = workingDirs.length > 1
     ? '\n' + workingDirs.map((d, i) => `  ${i === 0 ? '→' : ' '} ${d}`).join('\n')
@@ -360,56 +363,60 @@ export class GrokChat {
   }
 
   private printWelcome(resumedTitle?: string): void {
-    const width = Math.min(process.stdout.columns || 72, 72);
-    const top = '╭' + '─'.repeat(width - 2) + '╮';
-    const bot = '╰' + '─'.repeat(width - 2) + '╯';
-    const mid = (text: string): string => {
+    // Claude Code-style welcome: small bordered box with star icon,
+    // a help hint line, and the working directory.
+    const width = Math.min(process.stdout.columns || 62, 62);
+    const innerWidth = width - 4; // account for "│ " and " │"
+    const top = chalk.dim('╭' + '─'.repeat(width - 2) + '╮');
+    const bot = chalk.dim('╰' + '─'.repeat(width - 2) + '╯');
+    const line = (text: string): string => {
       const visible = text.replace(/\x1B\[[0-9;]*m/g, '');
-      const pad = Math.max(0, width - 2 - visible.length);
-      return chalk.cyan('│') + text + ' '.repeat(pad) + chalk.cyan('│');
+      const pad = Math.max(0, innerWidth - visible.length);
+      return chalk.dim('│ ') + text + ' '.repeat(pad) + chalk.dim(' │');
     };
+    const blank = line('');
 
-    const modeIcon = this.thinkingMode ? '🧠' : '⚡';
-    const modeLabel = this.thinkingMode ? 'Thinking' : 'Fast';
-    const model = this.client.model;
     const cwd = process.cwd().replace(os.homedir(), '~');
-    const toolCount = allTools.length;
+    const star = GROK_ORANGE('✻');
 
     console.log();
-    console.log(chalk.cyan(top));
-    console.log(mid(chalk.bold.white('  ✦ Grok Code ') + chalk.dim(`v${VERSION}`)));
-    console.log(mid(''));
-    console.log(mid(chalk.dim('  Model:  ') + chalk.white(model) + chalk.dim(` ${modeIcon} ${modeLabel}`)));
-    console.log(mid(chalk.dim('  CWD:    ') + chalk.white(cwd)));
-    console.log(mid(chalk.dim('  Tools:  ') + chalk.white(`${toolCount} available`) + chalk.dim(' — Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch')));
-    if (this.customCommands.length > 0) {
-      console.log(mid(chalk.dim('  Custom: ') + chalk.white(`${this.customCommands.length} custom command${this.customCommands.length === 1 ? '' : 's'} loaded`)));
+    console.log(top);
+    console.log(line(star + ' ' + chalk.bold(`Welcome to Grok Code!`)));
+    console.log(blank);
+    console.log(line(chalk.dim('  /help for help, /status for your current setup')));
+    console.log(blank);
+    console.log(line(chalk.dim('  cwd: ') + cwd));
+    if (resumedTitle) {
+      console.log(blank);
+      console.log(line(chalk.dim('  resumed: ') + chalk.yellow(resumedTitle)));
     }
     if (this.projectContext) {
-      console.log(mid(chalk.dim('  Context: ') + chalk.white('GROK.md loaded')));
+      console.log(line(chalk.dim('  ') + chalk.dim('✓ GROK.md loaded')));
     }
-    if (resumedTitle) {
-      console.log(mid(''));
-      console.log(mid(chalk.dim('  Resumed: ') + chalk.yellow(resumedTitle)));
+    if (this.customCommands.length > 0) {
+      console.log(line(chalk.dim(`  ✓ ${this.customCommands.length} custom command${this.customCommands.length === 1 ? '' : 's'}`)));
     }
-    console.log(mid(''));
-    console.log(mid(chalk.dim('  /help for commands · Tab: toggle mode · Esc: stop · Ctrl+C: exit')));
-    console.log(chalk.cyan(bot));
+    console.log(bot);
     console.log();
   }
 
   private async loop(): Promise<void> {
     const showPrompt = (): Promise<string> => {
       return new Promise((resolve) => {
-        const modeIcon = this.thinkingMode ? '🧠' : '⚡';
-        const planBadge = this.planMode ? chalk.yellow(' [plan] ') : '';
-        const attachBadge =
-          this.pending.images.length > 0
-            ? chalk.magenta(` [${this.pending.images.length} image${this.pending.images.length === 1 ? '' : 's'}] `)
-            : '';
-        console.log(chalk.dim('─'.repeat(Math.min(process.stdout.columns || 60, 60))));
-        const p = chalk.bold.cyan(`${modeIcon} ❯ `) + planBadge + attachBadge;
-        this.rl.question(p, (answer) => resolve(answer));
+        const badges: string[] = [];
+        if (this.planMode) badges.push(chalk.yellow('plan mode'));
+        if (!this.thinkingMode) badges.push(chalk.dim('fast mode'));
+        if (this.pending.images.length > 0) {
+          const n = this.pending.images.length;
+          badges.push(chalk.magenta(`${n} image${n === 1 ? '' : 's'} attached`));
+        }
+        const footer =
+          badges.length > 0
+            ? chalk.dim('  ') + badges.join(chalk.dim(' · ')) + chalk.dim(' · ? for shortcuts')
+            : chalk.dim('  ? for shortcuts');
+
+        console.log(footer);
+        this.rl.question(chalk.dim('> '), (answer) => resolve(answer));
       });
     };
 
@@ -1553,11 +1560,12 @@ Provide specific, actionable feedback.`;
       return;
     }
 
-    console.log(chalk.green('  ● ') + chalk.bold(name) + chalk.dim('(') + chalk.white(invocation) + chalk.dim(')'));
+    console.log(GROK_ORANGE('● ') + chalk.bold(name) + chalk.dim('(') + invocation + chalk.dim(')'));
+
 
     // Execute with a spinner for slow tools
     const useSpinner = name === 'Bash' || name === 'WebFetch' || name === 'WebSearch';
-    const spinner = useSpinner ? startSpinner('Running…', '    ') : null;
+    const spinner = useSpinner ? startSpinner('Running…', '  ') : null;
 
     let result: ToolResult;
     try {
@@ -1575,10 +1583,10 @@ Provide specific, actionable feedback.`;
     }
     spinner?.stop();
 
-    // Display the result
+    // Display the result — Claude Code style: ⎿  summary (ctrl+r to expand)
     if (result.success) {
       const summary = result.display?.summary || defaultToolSummary(name, result.output);
-      console.log(chalk.dim('    ⎿ ') + summary);
+      console.log('  ' + chalk.dim('⎿  ') + summary);
       if (result.display?.preview) {
         console.log(result.display.preview);
       } else if (shouldShowPreview(name)) {
@@ -1586,8 +1594,9 @@ Provide specific, actionable feedback.`;
         if (preview) console.log(preview);
       }
     } else {
-      console.log(chalk.dim('    ⎿ ') + chalk.red(result.error || 'Failed'));
+      console.log('  ' + chalk.dim('⎿  ') + chalk.red(result.error || 'Failed'));
     }
+    console.log();
 
     this.messages.push({
       role: 'tool',
@@ -1617,26 +1626,27 @@ Provide specific, actionable feedback.`;
 
 function formatToolInvocation(name: string, params: Record<string, unknown>): string {
   const truncate = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+  const style = chalk.white;
 
   switch (name) {
     case 'Read':
     case 'Write':
     case 'Edit':
-      return truncate(relOrAbs(String(params.file_path || '')), 60);
+      return style(truncate(relOrAbs(String(params.file_path || '')), 60));
     case 'Bash':
-      return truncate(String(params.command || ''), 60);
+      return style(truncate(String(params.command || ''), 60));
     case 'Glob':
-      return truncate(String(params.pattern || ''), 60);
+      return style(truncate(String(params.pattern || ''), 60));
     case 'Grep': {
       const inc = params.include ? ` --include ${params.include}` : '';
-      return truncate(String(params.pattern || '') + inc, 60);
+      return style(truncate(String(params.pattern || '') + inc, 60));
     }
     case 'WebFetch':
-      return truncate(String(params.url || ''), 60);
+      return style(truncate(String(params.url || ''), 60));
     case 'WebSearch':
-      return truncate(String(params.query || ''), 60);
+      return style(truncate(String(params.query || ''), 60));
     default:
-      return truncate(JSON.stringify(params), 60);
+      return style(truncate(JSON.stringify(params), 60));
   }
 }
 
@@ -1687,20 +1697,24 @@ function buildPreview(output: string): string {
   return preview;
 }
 
-// Small animated spinner
-function startSpinner(label: string, indent: string = '  '): { stop: () => void } {
+// Claude Code-style pulsing ✻ spinner.
+function startSpinner(label: string, indent: string = ''): { stop: () => void } {
   if (!process.stdout.isTTY) {
     return { stop: () => {} };
   }
-  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  // Pulse between dim and bright orange to match Claude Code's ✻ animation.
+  const frames = ['✻', '✻', '✻', '✺', '✹', '✸', '✷', '✶', '✶', '✶', '✷', '✸', '✹', '✺'];
   let i = 0;
   let stopped = false;
-  process.stdout.write(`${indent}${chalk.cyan(frames[0])} ${chalk.dim(label)}`);
+  const write = (frame: string) => {
+    process.stdout.write(`\r${indent}${GROK_ORANGE(frame)} ${chalk.dim(label)}`);
+  };
+  write(frames[0]);
   const timer = setInterval(() => {
     if (stopped) return;
     i = (i + 1) % frames.length;
-    process.stdout.write(`\r${indent}${chalk.cyan(frames[i])} ${chalk.dim(label)}`);
-  }, 80);
+    write(frames[i]);
+  }, 100);
   return {
     stop: () => {
       if (stopped) return;
