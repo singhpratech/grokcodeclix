@@ -91,7 +91,8 @@ export async function readTool(params: ReadToolParams): Promise<ToolResult> {
       header = `[Showing lines ${offset + 1}-${offset + selectedLines.length} of ${totalLines}]\n`;
     }
 
-    const relPath = path.relative(process.cwd(), filePath) || filePath;
+    const rel = path.relative(process.cwd(), filePath);
+    const relPath = !rel || rel.startsWith('..') ? filePath : rel;
     const displaySummary =
       offset > 0 || selectedLines.length < totalLines
         ? `Read lines ${offset + 1}-${offset + selectedLines.length} of ${relPath} (${totalLines} total)`

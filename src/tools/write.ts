@@ -54,7 +54,8 @@ export async function writeTool(params: WriteToolParams): Promise<ToolResult> {
 
     const lines = params.content.split('\n').length;
     const size = params.content.length;
-    const relPath = path.relative(process.cwd(), filePath) || filePath;
+    const rel = path.relative(process.cwd(), filePath);
+    const relPath = !rel || rel.startsWith('..') ? filePath : rel;
 
     if (wasExisting) {
       const diff = computeDiff(previousContent, params.content);

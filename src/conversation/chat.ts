@@ -93,6 +93,8 @@ export interface ChatInitOptions {
   model?: string;
   resume?: boolean;
   sessionId?: string;
+  /** If true, bypass all permission prompts (for scripting / non-interactive use). */
+  yes?: boolean;
 }
 
 // Keep old name as alias for backwards compat with index.ts exports
@@ -193,6 +195,9 @@ export class GrokChat {
     });
     this.permissions = new PermissionManager();
     this.permissions.setReadlineInterface(this.rl);
+    if (options.yes) {
+      this.permissions.setYolo(true);
+    }
     this.history = new HistoryManager();
     this.config = new ConfigManager();
 
@@ -294,8 +299,11 @@ export class GrokChat {
 
   // Non-interactive single prompt mode (piped input or CLI args)
   async sendSingle(prompt: string): Promise<void> {
+    // In non-interactive mode there's no human to answer permission prompts.
+    // Auto-approve everything so tool calls can complete.
+    this.permissions.setYolo(true);
+
     await this.initSession(true);
-    // Strip system prompt noise in non-interactive to keep output clean
     try {
       await this.processMessage(prompt, { quietPrompt: true });
     } catch (error) {

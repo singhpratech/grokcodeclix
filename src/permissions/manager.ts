@@ -43,6 +43,7 @@ const RISK_ICONS = {
 export class PermissionManager {
   private config: PermissionConfig;
   private rl: readline.Interface | null = null;
+  private yolo: boolean = false;
 
   constructor(autoApprove: string[] = []) {
     this.config = {
@@ -56,8 +57,18 @@ export class PermissionManager {
     this.rl = rl;
   }
 
+  /** Bypass all permission prompts. Used for non-interactive runs (-y flag). */
+  setYolo(on: boolean): void {
+    this.yolo = on;
+  }
+
   async requestPermission(request: PermissionRequest): Promise<boolean> {
     const { tool, description, riskLevel, details } = request;
+
+    // Yolo mode: bypass everything (non-interactive runs)
+    if (this.yolo) {
+      return true;
+    }
 
     // Check if always denied
     if (this.config.alwaysDeny.includes(tool)) {

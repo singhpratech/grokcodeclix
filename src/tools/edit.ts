@@ -68,7 +68,8 @@ export async function editTool(params: EditToolParams): Promise<ToolResult> {
     // Write back
     await fs.writeFile(filePath, newContent, 'utf-8');
 
-    const relPath = path.relative(process.cwd(), filePath) || filePath;
+    const rel = path.relative(process.cwd(), filePath);
+    const relPath = !rel || rel.startsWith('..') ? filePath : rel;
 
     return {
       success: true,

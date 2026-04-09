@@ -45,6 +45,7 @@ program
   .option('-m, --model <model>', 'Grok model to use', 'grok-4-1-fast-reasoning')
   .option('-r, --resume [sessionId]', 'Resume a previous conversation')
   .option('-p, --print', 'Print response and exit (non-interactive)')
+  .option('-y, --yes', 'Auto-approve all tool calls (skip permission prompts)')
   .action(async (promptArgs: string[], options) => {
     const config = new ConfigManager();
     let apiKey = await config.getApiKey();
@@ -76,6 +77,7 @@ program
     const chat = new GrokChat({
       apiKey,
       model: options.model,
+      yes: options.yes,
     });
 
     if (directPrompt) {
