@@ -1820,6 +1820,70 @@ Provide specific, actionable feedback.`;
     this.slashPopupLines = 0;
   }
 
+  // === Stream → rendered markdown re-render ===
+
+  /**
+   * After streaming raw tokens to the terminal, rewind the cursor over
+   * the raw region and repaint it using the proper markdown renderer.
+   * This gives users the best of both worlds: live streaming feel + a
+   * nicely formatted final result (headers, code blocks, lists, etc).
+   *
+   * No-op on non-TTY terminals (tests, pipes) — those just get plain text.
+   */
+  private rewindAndRerender(content: string): void {
+    if (!content) return;
+
+    if (!process.stdout.isTTY) {
+      // Non-TTY: we suppressed raw output during streaming (see the
+      // `if (process.stdout.isTTY)` gate in the stream loop), so now
+      // we print the rendered version once for piped/logged output.
+      process.stdout.write(renderMarkdown(content));
+      process.stdout.write('\n');
+      return;
+    }
+
+    const cols = process.stdout.columns || 80;
+    const endsWithNewline = content.endsWith('\n');
+
+    // Count the visual rows the raw stream occupied, accounting for
+    // line wrapping when a logical line is wider than the terminal.
+    const logical = content.split('\n');
+    const linesToCount = endsWithNewline ? logical.slice(0, -1) : logical;
+
+    let visualRows = 0;
+    for (const line of linesToCount) {
+      // Strip any accidental ANSI codes before measuring
+      const visible = line.replace(/\x1B\[[0-9;]*m/g, '');
+      // Empty lines still take 1 visual row
+      const rowsForLine = visible.length === 0 ? 1 : Math.ceil(visible.length / cols);
+      visualRows += rowsForLine;
+    }
+
+    if (visualRows === 0) {
+      process.stdout.write('\n');
+      return;
+    }
+
+    // Figure out how many rows to move the cursor up:
+    //   - if content ends with a newline, cursor is 1 row BELOW the last
+    //     content row, so move up by `visualRows` to reach the start
+    //   - otherwise cursor is ON the last content row, so move up by
+    //     `visualRows - 1`
+    const rowsBack = endsWithNewline ? visualRows : Math.max(0, visualRows - 1);
+
+    const out = process.stdout;
+    out.write('\r'); // column 0
+    if (rowsBack > 0) {
+      out.write(`\x1B[${rowsBack}A`); // up N rows
+    }
+    out.write('\x1B[J'); // clear from cursor to end of screen
+
+    // Paint the rendered markdown, followed by a trailing newline for
+    // spacing before the next prompt or tool call.
+    out.write(renderMarkdown(content));
+    out.write('\n');
+  }
+
   // === Shell escape and memory add ===
 
   /** Run a shell command immediately via Bash tool, bypassing Grok. */
@@ -2041,7 +2105,14 @@ Provide specific, actionable feedback.`;
             }
             firstContentChunk = false;
           }
-          process.stdout.write(delta.content);
+          // In a TTY we stream raw tokens live and re-paint with
+          // rendered markdown after the stream ends (see
+          // rewindAndRerender). In non-TTY (pipes, logs) we collect
+          // silently and render once at the end so the output is
+          // clean markdown instead of raw text.
+          if (process.stdout.isTTY) {
+            process.stdout.write(delta.content);
+          }
           fullContent += delta.content;
         }
 
@@ -2080,8 +2151,12 @@ Provide specific, actionable feedback.`;
 
       spinner.stop();
 
+      // Rewind over the raw streamed text and repaint it as rendered
+      // markdown (headers, code blocks with syntax highlight, lists, etc).
+      // Skipped when aborted so the user can still see what was written
+      // up to the interruption.
       if (fullContent && !aborted) {
-        console.log();
+        this.rewindAndRerender(fullContent);
       }
 
       const message: GrokMessage = {
