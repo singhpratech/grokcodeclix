@@ -21,10 +21,11 @@ const TOOL_RISK_LEVELS: Record<string, ToolRiskLevel> = {
   Read: 'read',
   Glob: 'read',
   Grep: 'read',
+  WebFetch: 'read',
+  WebSearch: 'read',
   Write: 'write',
   Edit: 'write',
   Bash: 'execute',
-  WebFetch: 'read',
 };
 
 const RISK_COLORS = {
@@ -191,6 +192,8 @@ export class PermissionManager {
         return `Search in files: ${params.pattern}`;
       case 'WebFetch':
         return `Fetch URL: ${params.url}`;
+      case 'WebSearch':
+        return `Search web: ${params.query}`;
       default:
         return `Execute ${tool}`;
     }

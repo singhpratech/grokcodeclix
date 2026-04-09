@@ -81,24 +81,28 @@ export async function readTool(params: ReadToolParams): Promise<ToolResult> {
         const lineNum = offset + i + 1;
         // Truncate very long lines
         const displayLine = line.length > 2000 ? line.slice(0, 2000) + '...' : line;
-        return `${String(lineNum).padStart(padding)}${chalk.gray('│')} ${displayLine}`;
+        return `${String(lineNum).padStart(padding)}\t${displayLine}`;
       })
       .join('\n');
 
-    // Add metadata
+    // Add metadata header (plain text, not colored — goes to model)
     let header = '';
     if (offset > 0 || selectedLines.length < totalLines) {
-      header = chalk.gray(`Showing lines ${offset + 1}-${offset + selectedLines.length} of ${totalLines}\n`);
+      header = `[Showing lines ${offset + 1}-${offset + selectedLines.length} of ${totalLines}]\n`;
     }
 
-    // Security warning if applicable
-    if (security.severity === 'medium') {
-      header = chalk.yellow(`⚠️ ${security.suggestion}\n`) + header;
-    }
+    const relPath = path.relative(process.cwd(), filePath) || filePath;
+    const displaySummary =
+      offset > 0 || selectedLines.length < totalLines
+        ? `Read lines ${offset + 1}-${offset + selectedLines.length} of ${relPath} (${totalLines} total)`
+        : `Read ${selectedLines.length} line${selectedLines.length === 1 ? '' : 's'} from ${relPath}`;
 
     return {
       success: true,
       output: header + (output || '(empty file)'),
+      display: {
+        summary: displaySummary,
+      },
     };
   } catch (error) {
     const err = error as NodeJS.ErrnoException;

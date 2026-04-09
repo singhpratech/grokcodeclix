@@ -1,6 +1,6 @@
 {
   "name": "grokcodecli",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "description": "CLI coding assistant powered by Grok AI - like Claude Code but for xAI's Grok models",
   "main": "dist/index.js",
   "bin": {
@@ -12,6 +12,7 @@
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
     "lint": "eslint src --ext .ts,.tsx",
+    "test": "npm run build && FORCE_COLOR=1 node smoke-test.mjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

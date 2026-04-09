@@ -2,7 +2,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { ToolResult } from './registry.js';
 import { validatePath } from '../utils/security.js';
-import chalk from 'chalk';
+import { computeDiff, renderDiff, formatDiffSummary } from '../utils/diff.js';
 
 export interface WriteToolParams {
   file_path: string;
@@ -35,15 +35,14 @@ export async function writeTool(params: WriteToolParams): Promise<ToolResult> {
       };
     }
 
-    // Check if file exists (for backup/warning)
+    // Check if file exists (for diff display)
     let wasExisting = false;
-    let previousSize = 0;
+    let previousContent = '';
     try {
-      const stats = await fs.stat(filePath);
+      previousContent = await fs.readFile(filePath, 'utf-8');
       wasExisting = true;
-      previousSize = stats.size;
     } catch {
-      // File doesn't exist, that's fine
+      // File doesn't exist — treat as creating new
     }
 
     // Ensure directory exists
@@ -55,25 +54,33 @@ export async function writeTool(params: WriteToolParams): Promise<ToolResult> {
 
     const lines = params.content.split('\n').length;
     const size = params.content.length;
-
-    let output = `${chalk.white('✓')} File written: ${filePath}\n`;
-    output += `  ${chalk.gray('Lines:')} ${lines}\n`;
-    output += `  ${chalk.gray('Size:')} ${formatSize(size)}`;
+    const relPath = path.relative(process.cwd(), filePath) || filePath;
 
     if (wasExisting) {
-      const diff = size - previousSize;
-      const diffStr = diff >= 0 ? `+${formatSize(diff)}` : `-${formatSize(Math.abs(diff))}`;
-      output += ` (${diffStr} from previous)`;
-    }
-
-    // Security warning if applicable
-    if (security.severity === 'medium') {
-      output = chalk.yellow(`⚠️ ${security.suggestion}\n`) + output;
+      const diff = computeDiff(previousContent, params.content);
+      const rendered = renderDiff(diff, 30, 2);
+      const summary = formatDiffSummary(diff);
+      return {
+        success: true,
+        output: `File updated: ${filePath} (${lines} lines, ${formatSize(size)}, ${summary})`,
+        display: {
+          summary: `Updated ${relPath} with ${summary}`,
+          preview: rendered,
+          diff: {
+            additions: diff.additions,
+            removals: diff.removals,
+            rendered,
+          },
+        },
+      };
     }
 
     return {
       success: true,
-      output,
+      output: `File created: ${filePath} (${lines} lines, ${formatSize(size)})`,
+      display: {
+        summary: `Created ${relPath} (${lines} lines, ${formatSize(size)})`,
+      },
     };
   } catch (error) {
     const err = error as NodeJS.ErrnoException;

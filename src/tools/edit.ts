@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { ToolResult } from './registry.js';
+import { computeDiff, renderDiff, formatDiffSummary } from '../utils/diff.js';
 
 export interface EditToolParams {
   file_path: string;
@@ -59,12 +60,28 @@ export async function editTool(params: EditToolParams): Promise<ToolResult> {
       replacements = 1;
     }
 
+    // Compute diff for display BEFORE writing (cheap, pure function)
+    const diff = computeDiff(content, newContent);
+    const rendered = renderDiff(diff, 30, 2);
+    const summary = formatDiffSummary(diff);
+
     // Write back
     await fs.writeFile(filePath, newContent, 'utf-8');
 
+    const relPath = path.relative(process.cwd(), filePath) || filePath;
+
     return {
       success: true,
-      output: `File edited successfully: ${filePath} (${replacements} replacement${replacements > 1 ? 's' : ''})`,
+      output: `File edited successfully: ${filePath} (${replacements} replacement${replacements > 1 ? 's' : ''}, ${summary})`,
+      display: {
+        summary: `Updated ${relPath} with ${summary}`,
+        preview: rendered,
+        diff: {
+          additions: diff.additions,
+          removals: diff.removals,
+          rendered,
+        },
+      },
     };
   } catch (error) {
     const err = error as Error;

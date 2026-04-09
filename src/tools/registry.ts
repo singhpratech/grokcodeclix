@@ -20,8 +20,22 @@ export type ToolParams =
 
 export interface ToolResult {
   success: boolean;
+  /** The tool output as text — this goes back to the model */
   output: string;
   error?: string;
+  /** Optional display metadata for Claude-Code-style result rendering */
+  display?: {
+    /** Short summary line, e.g. "Read 141 lines" */
+    summary?: string;
+    /** Full result preview to show the user (colored, truncated) */
+    preview?: string;
+    /** Structured diff for Edit/Write operations */
+    diff?: {
+      additions: number;
+      removals: number;
+      rendered: string;
+    };
+  };
 }
 
 export const allTools: Tool[] = [
