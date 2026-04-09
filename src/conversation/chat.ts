@@ -551,7 +551,7 @@ export class GrokChat {
 
         const parts = [modelBit];
         if (badges.length > 0) parts.push(badges.join(chalk.dim(' · ')));
-        parts.push(chalk.dim('? for shortcuts'));
+        parts.push(chalk.cyan('/') + chalk.dim(' for commands') + chalk.dim(' · ') + chalk.dim('? for shortcuts'));
 
         const footer = chalk.dim('  ') + parts.join(chalk.dim(' · '));
         console.log(footer);
