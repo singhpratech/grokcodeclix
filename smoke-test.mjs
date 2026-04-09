@@ -549,6 +549,65 @@ await section('CLI --version', async () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────────
+// 11. New Claude-Code parity features
+// ───────────────────────────────────────────────────────────────────────────
+await section('Claude Code parity features', async () => {
+  // Verify the chat module exports and its slash command list is complete
+  const { GrokChat } = await import(`${DIST}/conversation/chat.js`);
+  assert(typeof GrokChat === 'function', 'GrokChat class exported');
+
+  // Build a chat instance (doesn't start the loop)
+  const chat = new GrokChat({ apiKey: 'fake-key-for-test' });
+
+  // Check that the slash command map contains the new commands
+  const commandNames = Object.keys(GrokChat.SLASH_COMMANDS || {});
+  assert(commandNames.includes('/bug'), 'has /bug');
+  assert(commandNames.includes('/release-notes'), 'has /release-notes');
+  assert(commandNames.includes('/memory'), 'has /memory');
+  assert(commandNames.includes('/output-style'), 'has /output-style');
+  assert(commandNames.includes('/theme'), 'has /theme');
+  assert(commandNames.includes('/back'), 'has /back');
+  assert(commandNames.includes('/backup'), 'has /backup');
+
+  // Clean up the rl so the process can exit
+  try {
+    chat['rl']?.close();
+  } catch {}
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 12. Memory system — loading GROK.md from multiple locations
+// ───────────────────────────────────────────────────────────────────────────
+await section('Memory hierarchy', async () => {
+  // Create a fake project with a GROK.md
+  const projectDir = path.join(TMP, 'memory-project');
+  await fs.mkdir(projectDir, { recursive: true });
+  await fs.writeFile(
+    path.join(projectDir, 'GROK.md'),
+    '# Test Project\n\n## Notes\n- Use TypeScript\n',
+    'utf-8'
+  );
+
+  const origCwd = process.cwd();
+  process.chdir(projectDir);
+  try {
+    const { GrokChat } = await import(`${DIST}/conversation/chat.js?v=${Date.now()}`);
+    const chat = new GrokChat({ apiKey: 'fake' });
+    // Call the private loader via any-cast
+    await chat['loadProjectContext']();
+    const ctx = chat['projectContext'];
+    assert(typeof ctx === 'string' && ctx.includes('Test Project'), 'loaded project GROK.md');
+    assert(ctx.includes('TypeScript'), 'loaded project GROK.md contents');
+
+    try {
+      chat['rl']?.close();
+    } catch {}
+  } finally {
+    process.chdir(origCwd);
+  }
+});
+
+// ───────────────────────────────────────────────────────────────────────────
 // Cleanup
 // ───────────────────────────────────────────────────────────────────────────
 await fs.rm(TMP, { recursive: true, force: true }).catch(() => {});

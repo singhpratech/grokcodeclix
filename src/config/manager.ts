@@ -81,11 +81,22 @@ export class ConfigManager {
     this.config.delete(key);
   }
 
-  async setupAuth(): Promise<boolean> {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
+  /**
+   * Run the interactive auth flow.
+   *
+   * If `existingRl` is provided, reuse it instead of creating a second
+   * readline interface (avoids conflicts when called from inside an
+   * active chat session). Pass the chat's own rl to keep input routing
+   * consistent.
+   */
+  async setupAuth(existingRl?: readline.Interface): Promise<boolean> {
+    const ownRl = !existingRl;
+    const rl: readline.Interface =
+      existingRl ||
+      readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
 
     const question = (prompt: string): Promise<string> => {
       return new Promise((resolve) => {

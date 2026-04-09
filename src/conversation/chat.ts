@@ -139,38 +139,61 @@ export class GrokChat {
   private projectContext: string = '';
   private pending: PendingAttachments = { images: [] };
   private contextWindowTokens: number = 256_000; // Grok 4.1 default
+  private outputStyle: 'default' | 'concise' | 'verbose' = 'default';
+  private theme: 'tiranga' | 'claude' | 'mono' = 'tiranga';
+  /** Snapshots of the messages array for /back undo */
+  private undoStack: GrokMessage[][] = [];
+  /** Live slash-popup bookkeeping */
+  private slashPopupActive: boolean = false;
+  private slashPopupLines: number = 0;
 
-  // Built-in slash commands with descriptions
+  // Built-in slash commands with descriptions (matching Claude Code coverage).
   private static SLASH_COMMANDS: Record<string, string> = {
+    // Session
     '/help': 'Show available commands',
     '/clear': 'Clear the conversation',
     '/compact': 'Compact the conversation context',
-    '/model': 'Change the Grok model',
-    '/plan': 'Toggle plan mode (read-only)',
-    '/stream': 'Toggle streaming responses',
     '/history': 'Browse previous sessions',
     '/resume': 'Resume a previous session',
     '/rename': 'Rename the current session',
     '/export': 'Export conversation to file',
     '/save': 'Save the current session',
+    '/back': 'Undo the last turn (user + assistant)',
+    '/backup': 'Save a named backup snapshot of this session',
+    '/exit': 'Exit and save',
+
+    // Config
+    '/config': 'Show configuration',
+    '/model': 'Change the Grok model',
+    '/plan': 'Toggle plan mode (read-only)',
+    '/stream': 'Toggle streaming responses',
+    '/permissions': 'View permission settings',
+    '/output-style': 'Set response style (default / concise / verbose)',
+    '/theme': 'Change color theme',
+    '/login': 'Authenticate with xAI',
+    '/logout': 'Clear stored credentials',
+
+    // Info
     '/status': 'Show session status',
     '/context': 'Show context window usage',
     '/cost': 'Show token usage and estimated cost',
     '/usage': 'Show usage statistics',
     '/doctor': 'Run diagnostic checks',
     '/version': 'Show version',
+    '/release-notes': 'Show recent changes',
+    '/bug': 'Report a bug (opens GitHub issues)',
+
+    // Project
     '/init': 'Initialize GROK.md in this project',
+    '/memory': 'View or edit GROK.md project memory',
     '/review': 'Ask Grok to review recent changes',
     '/add-dir': 'Add a working directory',
     '/pwd': 'Show working directories',
-    '/permissions': 'View permission settings',
-    '/config': 'Show configuration',
-    '/login': 'Authenticate with xAI',
-    '/logout': 'Clear stored credentials',
-    '/image': 'Attach an image from clipboard or path',
+
+    // Attachments & custom
+    '/image': 'Attach an image from a file path',
     '/paste': 'Paste image from clipboard',
     '/commands': 'List custom commands',
-    '/exit': 'Exit and save',
   };
 
   constructor(options: ChatInitOptions) {
@@ -207,6 +230,56 @@ export class GrokChat {
     }
     this.history = new HistoryManager();
     this.config = new ConfigManager();
+
+    // Extra keybindings: Ctrl+O (backup), Ctrl+B (back/undo),
+    // Ctrl+L (clear screen), Shift+Tab (toggle plan mode), plus
+    // live slash-command suggestions that pop up as the user types.
+    if (process.stdin.isTTY) {
+      readline.emitKeypressEvents(process.stdin, this.rl);
+      process.stdin.on('keypress', (_str: string, key: { name?: string; ctrl?: boolean; shift?: boolean } | undefined) => {
+        if (!key || this.abortController) return; // ignore during streaming
+
+        // Ctrl+L — clear screen, keep prompt
+        if (key.ctrl && key.name === 'l') {
+          process.stdout.write('\x1Bc');
+          this.rl.prompt(true);
+          return;
+        }
+
+        // Ctrl+O — quick backup snapshot
+        if (key.ctrl && key.name === 'o') {
+          console.log();
+          this.handleBackup().catch((e) => console.log(chalk.red('  ' + (e as Error).message)));
+          return;
+        }
+
+        // Ctrl+B — undo last turn
+        if (key.ctrl && key.name === 'b') {
+          console.log();
+          this.handleBack();
+          return;
+        }
+
+        // Shift+Tab — toggle plan mode (Claude Code style)
+        if (key.shift && key.name === 'tab') {
+          this.planMode = !this.planMode;
+          console.log();
+          console.log(
+            chalk.dim('  plan mode ') + (this.planMode ? chalk.yellow('on') : chalk.dim('off'))
+          );
+          return;
+        }
+
+        // Live slash-command popup: after each keystroke, if the line
+        // starts with '/', show matching commands dimmed below the prompt.
+        // We use a simple single-line footer that gets rewritten in place.
+        if (this.rl.line.startsWith('/') && !key.ctrl) {
+          this.updateSlashPopup();
+        } else if (this.slashPopupActive) {
+          this.clearSlashPopup();
+        }
+      });
+    }
 
     // Ctrl+C: abort streaming or exit cleanly
     this.rl.on('SIGINT', async () => {
@@ -254,28 +327,78 @@ export class GrokChat {
     console.log(chalk.dim('  Mode: ') + modeLabel + chalk.dim(` (${newModel})`));
   }
 
-  // Load GROK.md from cwd (and parents) if it exists
+  // Claude Code-style memory hierarchy:
+  //   1. Global user memory: ~/.grok/GROK.md  (applies everywhere)
+  //   2. Project memory: ./GROK.md walked up from cwd to $HOME  (per-project)
+  //      — closest file wins when there are multiple
+  // All found files are concatenated into this.projectContext and injected
+  // into the system prompt.
   private async loadProjectContext(): Promise<void> {
-    const searchPaths: string[] = [];
-    let dir = process.cwd();
+    const contexts: string[] = [];
     const home = os.homedir();
+
+    // 1. Global user memory
+    const globalGrokMd = path.join(home, '.grok', 'GROK.md');
+    try {
+      const content = await fs.readFile(globalGrokMd, 'utf-8');
+      contexts.push(`[From ~/.grok/GROK.md — global memory]\n${content.trim()}`);
+    } catch {
+      // not set up
+    }
+
+    // 2. Project memory — walk up from cwd to $HOME collecting GROK.md files
+    const projectPaths: string[] = [];
+    let dir = process.cwd();
     while (dir && dir !== path.dirname(dir)) {
-      searchPaths.push(path.join(dir, 'GROK.md'));
+      projectPaths.push(path.join(dir, 'GROK.md'));
       if (dir === home) break;
       dir = path.dirname(dir);
     }
-
-    const contexts: string[] = [];
-    for (const p of searchPaths) {
+    // Nearest first so they win when conflicting
+    for (const p of projectPaths) {
       try {
         const content = await fs.readFile(p, 'utf-8');
         const rel = path.relative(process.cwd(), p) || p;
         contexts.push(`[From ${rel}]\n${content.trim()}`);
       } catch {
-        // not found, skip
+        // not found
       }
     }
+
     this.projectContext = contexts.join('\n\n');
+  }
+
+  /** Append a line to GROK.md memory (project or global). */
+  private async addToMemory(text: string, scope: 'project' | 'global' = 'project'): Promise<void> {
+    const target =
+      scope === 'global'
+        ? path.join(os.homedir(), '.grok', 'GROK.md')
+        : path.join(process.cwd(), 'GROK.md');
+
+    await fs.mkdir(path.dirname(target), { recursive: true });
+
+    let existing = '';
+    try {
+      existing = await fs.readFile(target, 'utf-8');
+    } catch {
+      existing = `# ${path.basename(process.cwd())}\n\n## Notes\n`;
+    }
+
+    const bullet = `- ${text.trim()}\n`;
+    if (/^## Notes/m.test(existing)) {
+      // Insert under ## Notes
+      const updated = existing.replace(/(^## Notes\s*\n)/m, `$1${bullet}`);
+      await fs.writeFile(target, updated, 'utf-8');
+    } else {
+      await fs.writeFile(target, existing.trimEnd() + `\n\n## Notes\n${bullet}`, 'utf-8');
+    }
+
+    // Reload into system prompt
+    await this.loadProjectContext();
+    this.messages[0] = {
+      role: 'system',
+      content: buildSystemPrompt(process.cwd(), this.workingDirs, this.projectContext),
+    };
   }
 
   private async initSession(fresh: boolean = true): Promise<void> {
@@ -421,7 +544,10 @@ export class GrokChat {
             : chalk.dim('  ? for shortcuts');
 
         console.log(footer);
-        this.rl.question(chalk.dim('> '), (answer) => resolve(answer));
+        this.rl.question(chalk.dim('> '), (answer) => {
+          this.clearSlashPopup();
+          resolve(answer);
+        });
       });
     };
 
@@ -442,6 +568,31 @@ export class GrokChat {
         console.log(chalk.gray('\nSession saved. Goodbye!\n'));
         this.rl.close();
         break;
+      }
+
+      // ! prefix — shell escape. Runs the command directly via Bash tool
+      // without involving Grok. Useful for quick git/ls/grep in-session.
+      if (trimmed.startsWith('!')) {
+        const command = trimmed.slice(1).trim();
+        if (command) {
+          await this.runShellEscape(command);
+        }
+        continue;
+      }
+
+      // # prefix — quick-add a line to GROK.md memory.
+      if (trimmed.startsWith('#')) {
+        const text = trimmed.slice(1).trim();
+        if (text) {
+          await this.handleMemoryAdd(text);
+        }
+        continue;
+      }
+
+      // ? — show help
+      if (trimmed === '?') {
+        this.showHelp();
+        continue;
       }
 
       // Handle slash commands
@@ -611,7 +762,9 @@ export class GrokChat {
 
       // Auth
       case 'login': {
-        const loginSuccess = await this.config.setupAuth();
+        // Pass our own rl so setupAuth doesn't spawn a second readline
+        // interface on the same stdin (that was the "disrupting" bug).
+        const loginSuccess = await this.config.setupAuth(this.rl);
         if (loginSuccess) {
           const newKey = await this.config.getApiKey();
           if (newKey) {
@@ -623,10 +776,16 @@ export class GrokChat {
         break;
       }
 
-      case 'logout':
+      case 'logout': {
+        const hadKey = !!(await this.config.getApiKey());
         this.config.delete('apiKey');
-        console.log(chalk.dim('  ✓ Logged out. Run /login to authenticate again.'));
+        if (hadKey) {
+          console.log(chalk.dim('  ✓ Logged out. Run /login to authenticate again.'));
+        } else {
+          console.log(chalk.dim('  (no credentials stored)'));
+        }
         break;
+      }
 
       // Images
       case 'image':
@@ -661,8 +820,44 @@ export class GrokChat {
         await this.handleInit();
         break;
 
+      case 'memory':
+        await this.handleMemory(args);
+        break;
+
       case 'review':
         await this.handleReview(args);
+        break;
+
+      // Undo / backup
+      case 'back':
+      case 'undo':
+        this.handleBack();
+        break;
+
+      case 'backup':
+        await this.handleBackup(args);
+        break;
+
+      // Style / theme
+      case 'output-style':
+      case 'style':
+        await this.handleOutputStyle(args);
+        break;
+
+      case 'theme':
+        await this.handleTheme(args);
+        break;
+
+      // Info
+      case 'release-notes':
+      case 'releases':
+      case 'changelog':
+        await this.handleReleaseNotes();
+        break;
+
+      case 'bug':
+      case 'report':
+        this.handleBug();
         break;
 
       default:
@@ -888,21 +1083,50 @@ export class GrokChat {
     const uptime = Math.floor((Date.now() - this.sessionStartTime.getTime()) / 1000);
     const minutes = Math.floor(uptime / 60);
     const seconds = uptime % 60;
+    const estTokens = this.estimateTokens();
+    const usagePct = Math.min(100, Math.round((estTokens / this.contextWindowTokens) * 100));
 
     console.log();
-    console.log(chalk.bold('  Status'));
-    console.log(chalk.dim('  ──────'));
-    console.log(`  Version:     ${VERSION}`);
-    console.log(`  Model:       ${this.client.model}`);
-    console.log(`  Mode:        ${this.thinkingMode ? '🧠 Thinking' : '⚡ Fast'}${this.planMode ? chalk.yellow(' [plan]') : ''}`);
-    console.log(`  Session:     ${this.session?.title || 'Untitled'}`);
-    console.log(`  Session ID:  ${this.session?.id.slice(0, 8) || 'N/A'}`);
-    console.log(`  Messages:    ${this.messages.length}`);
-    console.log(`  Uptime:      ${minutes}m ${seconds}s`);
-    console.log(`  Streaming:   ${this.useStreaming ? 'on' : 'off'}`);
-    console.log(`  CWD:         ${process.cwd()}`);
-    console.log(`  Platform:    ${process.platform} ${os.arch()}`);
-    console.log(`  Node:        ${process.version}`);
+    console.log('  ' + SAFFRON('✻') + ' ' + chalk.bold('Grok Code Status'));
+    console.log(chalk.dim('  ────────────────'));
+    console.log();
+
+    console.log(chalk.bold('  Version & model'));
+    console.log(`    Version:   ${VERSION}`);
+    console.log(`    Model:     ${this.client.model}`);
+    console.log(`    Mode:      ${this.thinkingMode ? '🧠 Thinking' : '⚡ Fast'}${this.planMode ? chalk.yellow(' · plan mode') : ''}`);
+    console.log(`    Streaming: ${this.useStreaming ? 'on' : 'off'}`);
+    console.log(`    Style:     ${this.outputStyle}`);
+    console.log();
+
+    console.log(chalk.bold('  Session'));
+    console.log(`    Title:     ${this.session?.title || 'Untitled'}`);
+    console.log(`    ID:        ${this.session?.id.slice(0, 8) || 'N/A'}`);
+    console.log(`    Messages:  ${this.messages.length} (${this.messages.filter((m) => m.role === 'user').length} user, ${this.messages.filter((m) => m.role === 'assistant').length} grok, ${this.messages.filter((m) => m.role === 'tool').length} tools)`);
+    console.log(`    Uptime:    ${minutes}m ${seconds}s`);
+    console.log(`    Undo:      ${this.undoStack.length} snapshot(s) available`);
+    console.log();
+
+    console.log(chalk.bold('  Context'));
+    console.log(`    Used:      ~${estTokens.toLocaleString()} / ${this.contextWindowTokens.toLocaleString()} tokens (${usagePct}%)`);
+    console.log(`    Tokens:    ${this.tokenUsage.totalTokens.toLocaleString()} this session`);
+    console.log();
+
+    console.log(chalk.bold('  Project'));
+    console.log(`    CWD:       ${process.cwd()}`);
+    if (this.workingDirs.length > 1) {
+      for (const d of this.workingDirs.slice(1)) {
+        console.log(`               ${d}`);
+      }
+    }
+    console.log(`    Memory:    ${this.projectContext ? INDIA_GREEN('✓') + ' GROK.md loaded' : chalk.dim('none — run /init')}`);
+    console.log(`    Commands:  ${this.customCommands.length > 0 ? INDIA_GREEN('✓') + ` ${this.customCommands.length} custom` : chalk.dim('none')}`);
+    console.log();
+
+    console.log(chalk.bold('  Environment'));
+    console.log(`    Platform:  ${process.platform} ${os.arch()}`);
+    console.log(`    Node:      ${process.version}`);
+    console.log(`    Config:    ~/.config/grokcodecli-nodejs/`);
     console.log();
   }
 
@@ -1022,6 +1246,50 @@ export class GrokChat {
       checks.push({ name: 'Git', status: 'ok', message: 'available' });
     } catch {
       checks.push({ name: 'Git', status: 'warn', message: 'not found (optional)' });
+    }
+
+    // Memory files
+    const globalMemPath = path.join(os.homedir(), '.grok', 'GROK.md');
+    const projectMemPath = path.join(process.cwd(), 'GROK.md');
+    try {
+      await fs.access(globalMemPath);
+      checks.push({ name: 'Global memory', status: 'ok', message: '~/.grok/GROK.md' });
+    } catch {
+      checks.push({ name: 'Global memory', status: 'warn', message: 'none (optional)' });
+    }
+    try {
+      await fs.access(projectMemPath);
+      checks.push({ name: 'Project memory', status: 'ok', message: 'GROK.md' });
+    } catch {
+      checks.push({ name: 'Project memory', status: 'warn', message: 'none — run /init' });
+    }
+
+    // Custom commands
+    if (this.customCommands.length > 0) {
+      checks.push({
+        name: 'Custom commands',
+        status: 'ok',
+        message: `${this.customCommands.length} loaded`,
+      });
+    } else {
+      checks.push({ name: 'Custom commands', status: 'warn', message: 'none' });
+    }
+
+    // Clipboard tools (for /paste)
+    try {
+      const { execSync } = await import('child_process');
+      const tool =
+        process.platform === 'darwin' ? 'pngpaste' :
+        process.platform === 'win32' ? 'powershell' :
+        'xclip';
+      execSync(`which ${tool}`, { stdio: 'pipe' });
+      checks.push({ name: 'Clipboard tool', status: 'ok', message: `${tool} available` });
+    } catch {
+      const suggestion =
+        process.platform === 'darwin' ? 'brew install pngpaste' :
+        process.platform === 'win32' ? 'n/a' :
+        'sudo apt install xclip';
+      checks.push({ name: 'Clipboard tool', status: 'warn', message: `not installed — ${suggestion}` });
     }
 
     if (apiKey) {
@@ -1191,16 +1459,226 @@ Provide specific, actionable feedback.`;
     await this.processMessage(reviewPrompt);
   }
 
+  // === New Claude-Code-parity handlers ===
+
+  private async handleMemory(args?: string): Promise<void> {
+    const grokMdPath = path.join(process.cwd(), 'GROK.md');
+
+    let exists = false;
+    try {
+      await fs.access(grokMdPath);
+      exists = true;
+    } catch {
+      // not found
+    }
+
+    if (!exists) {
+      console.log(chalk.yellow('  GROK.md not found in the current project.'));
+      console.log(chalk.dim('  Run /init to create one.'));
+      return;
+    }
+
+    const sub = (args || '').trim().toLowerCase();
+
+    if (sub === '' || sub === 'show') {
+      const content = await fs.readFile(grokMdPath, 'utf-8');
+      console.log();
+      console.log(chalk.bold('  GROK.md ') + chalk.dim(`(${grokMdPath})`));
+      console.log(chalk.dim('  ─────'));
+      console.log(content);
+      console.log();
+      return;
+    }
+
+    if (sub === 'edit' || sub === 'open') {
+      const editor = process.env.EDITOR || process.env.VISUAL || 'nano';
+      const { spawn } = await import('child_process');
+      console.log(chalk.dim(`  Opening ${editor} on GROK.md…`));
+      await new Promise<void>((resolve) => {
+        const child = spawn(editor, [grokMdPath], { stdio: 'inherit' });
+        child.on('close', () => resolve());
+        child.on('error', () => {
+          console.log(chalk.red(`  Could not launch ${editor}. Set $EDITOR and try again.`));
+          resolve();
+        });
+      });
+      // Reload into system prompt
+      await this.loadProjectContext();
+      this.messages[0] = {
+        role: 'system',
+        content: buildSystemPrompt(process.cwd(), this.workingDirs, this.projectContext),
+      };
+      console.log(chalk.dim('  ✓ GROK.md reloaded into system prompt.'));
+      return;
+    }
+
+    console.log(chalk.yellow(`  Usage: /memory [show|edit]`));
+  }
+
+  private handleBack(): void {
+    // Pop one snapshot off the undo stack to revert the last turn.
+    if (this.undoStack.length === 0) {
+      console.log(chalk.dim('  Nothing to undo.'));
+      return;
+    }
+    const snapshot = this.undoStack.pop()!;
+    this.messages = snapshot;
+    console.log(chalk.dim(`  ⏴ Reverted to previous turn (${this.messages.length} messages).`));
+  }
+
+  private async handleBackup(name?: string): Promise<void> {
+    if (!this.session) {
+      console.log(chalk.red('  No active session.'));
+      return;
+    }
+    const backupDir = path.join(os.homedir(), '.config', 'grokcodecli', 'backups');
+    await fs.mkdir(backupDir, { recursive: true });
+
+    const safeName = (name || '').trim().replace(/[^\w.-]+/g, '_');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = safeName
+      ? `${safeName}-${stamp}.json`
+      : `${this.session.id.slice(0, 8)}-${stamp}.json`;
+    const filePath = path.join(backupDir, filename);
+
+    const payload = {
+      version: VERSION,
+      savedAt: new Date().toISOString(),
+      session: {
+        ...this.session,
+        messages: this.messages,
+      },
+    };
+
+    await fs.writeFile(filePath, JSON.stringify(payload, null, 2), 'utf-8');
+    console.log(chalk.dim('  ') + INDIA_GREEN('✓') + chalk.dim(` Backup saved: ${filePath}`));
+  }
+
+  private async handleOutputStyle(args?: string): Promise<void> {
+    const choice = (args || '').trim().toLowerCase();
+    const valid: Array<'default' | 'concise' | 'verbose'> = ['default', 'concise', 'verbose'];
+
+    if (choice && (valid as string[]).includes(choice)) {
+      this.outputStyle = choice as typeof this.outputStyle;
+      this.reinjectStyle();
+      console.log(chalk.dim(`  Output style: ${this.outputStyle}`));
+      return;
+    }
+
+    const options: SelectorOption[] = [
+      { label: 'default', value: 'default', description: 'balanced — code + brief explanations' },
+      { label: 'concise', value: 'concise', description: 'terse — answers only, no fluff' },
+      { label: 'verbose', value: 'verbose', description: 'explain reasoning and alternatives' },
+    ];
+    console.log();
+    const selected = await interactiveSelect('Output style:', options, this.outputStyle);
+    if (selected) {
+      this.outputStyle = selected as typeof this.outputStyle;
+      this.reinjectStyle();
+      console.log(chalk.dim(`  ✓ Output style: ${this.outputStyle}`));
+    }
+  }
+
+  private reinjectStyle(): void {
+    // Append a style directive to the system prompt without rebuilding it.
+    const styleLine = this.outputStyle === 'concise'
+      ? '\n\n# Output style\nBe extremely terse. One-line answers when possible. No preamble, no explanations unless explicitly asked.'
+      : this.outputStyle === 'verbose'
+      ? '\n\n# Output style\nExplain your reasoning. When writing code, describe what each part does and mention alternatives considered. Longer is fine for teaching.'
+      : '';
+    const base = buildSystemPrompt(process.cwd(), this.workingDirs, this.projectContext);
+    this.messages[0] = { role: 'system', content: base + styleLine };
+  }
+
+  private async handleTheme(args?: string): Promise<void> {
+    const choice = (args || '').trim().toLowerCase();
+    const valid = ['tiranga', 'claude', 'mono'] as const;
+
+    if (choice && (valid as readonly string[]).includes(choice)) {
+      this.theme = choice as typeof this.theme;
+      console.log(chalk.dim(`  Theme: ${this.theme} ${chalk.yellow('(restart for full effect)')}`));
+      return;
+    }
+
+    const options: SelectorOption[] = [
+      { label: 'tiranga', value: 'tiranga', description: 'saffron · white · green (default)' },
+      { label: 'claude', value: 'claude', description: 'Claude Code amber' },
+      { label: 'mono', value: 'mono', description: 'monochrome (no accent)' },
+    ];
+    console.log();
+    const selected = await interactiveSelect('Theme:', options, this.theme);
+    if (selected) {
+      this.theme = selected as typeof this.theme;
+      console.log(chalk.dim(`  ✓ Theme: ${this.theme} ${chalk.yellow('(restart for full effect)')}`));
+    }
+  }
+
+  private async handleReleaseNotes(): Promise<void> {
+    // Prefer CHANGELOG.md if present, otherwise show the last few git commits.
+    const changelogPath = path.join(process.cwd(), 'CHANGELOG.md');
+    try {
+      const content = await fs.readFile(changelogPath, 'utf-8');
+      console.log();
+      console.log(chalk.bold('  Release notes') + chalk.dim(' (CHANGELOG.md)'));
+      console.log(chalk.dim('  ─────────────'));
+      console.log(content.slice(0, 4000));
+      if (content.length > 4000) console.log(chalk.dim('  … (truncated)'));
+      console.log();
+      return;
+    } catch {
+      // fall through to git log
+    }
+
+    try {
+      const { execSync } = await import('child_process');
+      const log = execSync('git log -10 --pretty=format:"%h  %s"', {
+        cwd: process.cwd(),
+        encoding: 'utf-8',
+      });
+      console.log();
+      console.log(chalk.bold('  Recent commits') + chalk.dim(' (last 10)'));
+      console.log(chalk.dim('  ──────────────'));
+      for (const line of log.split('\n')) {
+        const [hash, ...rest] = line.split('  ');
+        console.log('  ' + SAFFRON(hash) + '  ' + rest.join('  '));
+      }
+      console.log();
+    } catch {
+      console.log(chalk.yellow('  No CHANGELOG.md and not a git repo.'));
+    }
+  }
+
+  private handleBug(): void {
+    const url = 'https://github.com/singhpratech/grokcodeclix/issues/new';
+    const body = encodeURIComponent(
+      `**What happened?**\n\n\n**Expected**\n\n\n**Environment**\n- Grok Code v${VERSION}\n- Node ${process.version}\n- Platform ${process.platform} ${os.arch()}\n- Model ${this.client.model}\n`
+    );
+    const fullUrl = `${url}?title=bug%3A+&body=${body}`;
+    console.log();
+    console.log(chalk.bold('  Report a bug'));
+    console.log(chalk.dim('  ────────────'));
+    console.log('  ' + chalk.cyan(fullUrl));
+    console.log();
+    console.log(chalk.dim('  Paste the URL into your browser, or run:'));
+    console.log(chalk.dim(`    xdg-open "${fullUrl}"`));
+    console.log();
+  }
+
   private showHelp(): void {
     const c = chalk.cyan;
     const d = chalk.dim;
+    const hr = d('  ────────────────────────────────────────────────────────────────');
+
     console.log();
-    console.log(chalk.bold('  ✦ Grok Code ') + d(`v${VERSION}`));
-    console.log(d('  ───────────────────────────────────────────────────────────────────'));
+    console.log('  ' + SAFFRON('✻') + ' ' + chalk.bold('Grok Code ') + d(`v${VERSION}`));
+    console.log(hr);
     console.log();
+
     console.log(chalk.bold('  Session'));
     console.log(`  ${c('/clear')}               Clear the conversation`);
     console.log(`  ${c('/save')}                Save the current session`);
+    console.log(`  ${c('/back')}                Undo the last turn ${d('(Ctrl+B)')}`);
+    console.log(`  ${c('/backup')} ${d('[name]')}       Save a named backup snapshot ${d('(Ctrl+O)')}`);
     console.log(`  ${c('/history')}             Browse previous sessions`);
     console.log(`  ${c('/resume')} ${d('[id]')}          Resume a previous session`);
     console.log(`  ${c('/rename')} ${d('<name>')}        Rename the current session`);
@@ -1208,48 +1686,181 @@ Provide specific, actionable feedback.`;
     console.log(`  ${c('/compact')} ${d('[focus]')}      Compact context`);
     console.log(`  ${c('/exit')}                Save and quit`);
     console.log();
+
     console.log(chalk.bold('  Config'));
     console.log(`  ${c('/model')} ${d('[name]')}         Show or change the model`);
-    console.log(`  ${c('/plan')}                Toggle plan mode (read-only)`);
+    console.log(`  ${c('/plan')}                Toggle plan mode ${d('(Shift+Tab)')}`);
     console.log(`  ${c('/stream')}              Toggle streaming`);
+    console.log(`  ${c('/output-style')}        Response style (default/concise/verbose)`);
+    console.log(`  ${c('/theme')}               Color theme`);
     console.log(`  ${c('/permissions')}         Permission settings`);
     console.log(`  ${c('/config')}              Show configuration`);
     console.log(`  ${c('/login')}               Authenticate with xAI`);
     console.log(`  ${c('/logout')}              Clear credentials`);
     console.log();
+
     console.log(chalk.bold('  Info'));
     console.log(`  ${c('/status')}              Session status`);
     console.log(`  ${c('/context')}             Context window usage`);
     console.log(`  ${c('/cost')}                Token usage and cost`);
+    console.log(`  ${c('/usage')}               Usage stats`);
     console.log(`  ${c('/doctor')}              Run diagnostics`);
     console.log(`  ${c('/version')}             Show version`);
+    console.log(`  ${c('/release-notes')}       Recent changes`);
+    console.log(`  ${c('/bug')}                 Report a bug on GitHub`);
     console.log();
-    console.log(chalk.bold('  Project'));
-    console.log(`  ${c('/init')}                Initialize GROK.md`);
-    console.log(`  ${c('/review')} ${d('[focus]')}       Review recent changes`);
+
+    console.log(chalk.bold('  Project & memory'));
+    console.log(`  ${c('/init')}                Initialize GROK.md + .grok/commands/`);
+    console.log(`  ${c('/memory')} ${d('[show|edit]')}    View or edit GROK.md`);
+    console.log(`  ${c('/review')} ${d('[focus]')}       Code review`);
     console.log(`  ${c('/add-dir')} ${d('<path>')}       Add a working directory`);
     console.log(`  ${c('/pwd')}                 Show working directories`);
+    console.log(d('  Memory is loaded from ') + c('~/.grok/GROK.md') + d(' (global) and ') + c('GROK.md') + d(' in cwd/parents.'));
     console.log();
-    console.log(chalk.bold('  Images'));
+
+    console.log(chalk.bold('  Images & custom commands'));
     console.log(`  ${c('/image')} ${d('<path>')}         Attach an image from file`);
     console.log(`  ${c('/paste')}               Paste image from clipboard`);
-    console.log(d('  You can also drop image paths in your message: @screenshot.png'));
-    console.log();
-    console.log(chalk.bold('  Custom commands'));
     console.log(`  ${c('/commands')}            List custom commands`);
-    console.log(d('  Define them as .md files in .grok/commands/ or ~/.grok/commands/'));
+    console.log(d('  Inline: drop ') + c('@screenshot.png') + d(' in any message.'));
+    console.log(d('  Custom commands live in ') + c('.grok/commands/') + d(' or ') + c('~/.grok/commands/'));
     console.log();
+
+    console.log(chalk.bold('  Prefixes (at start of message)'));
+    console.log(`  ${c('!')}${d('<command>')}          Run shell command directly ${d('(bypasses Grok)')}`);
+    console.log(`  ${c('#')}${d('<note>')}             Add a note to GROK.md memory`);
+    console.log(`  ${c('/')}${d('<command>')}          Run a slash command`);
+    console.log(`  ${c('?')}                   Show this help`);
+    console.log();
+
     console.log(chalk.bold('  Keyboard shortcuts'));
-    console.log(`  ${d('Tab')}          Cycle suggestions / toggle mode (empty line)`);
+    console.log(`  ${d('Tab')}          Autocomplete slash command`);
+    console.log(`  ${d('Shift+Tab')}    Toggle plan mode`);
+    console.log(`  ${d('Ctrl+B')}       Undo last turn (back)`);
+    console.log(`  ${d('Ctrl+O')}       Save backup snapshot`);
+    console.log(`  ${d('Ctrl+L')}       Clear screen`);
     console.log(`  ${d('Esc')}          Stop streaming response`);
     console.log(`  ${d('Ctrl+C')}       Abort current action / exit`);
     console.log(`  ${d('Ctrl+D')}       Exit`);
     console.log();
+
     console.log(chalk.bold('  Tools'));
-    console.log(`  ${chalk.green('📖 Read')}   ${chalk.green('🔍 Glob')}   ${chalk.green('🔎 Grep')}   ${chalk.green('🌐 WebFetch')}   ${chalk.green('🔍 WebSearch')}`);
+    console.log(`  ${INDIA_GREEN('📖 Read')}   ${INDIA_GREEN('🔍 Glob')}   ${INDIA_GREEN('🔎 Grep')}   ${INDIA_GREEN('🌐 WebFetch')}   ${INDIA_GREEN('🔍 WebSearch')}`);
     console.log(`  ${chalk.yellow('✏️  Write')}   ${chalk.yellow('🔧 Edit')}`);
     console.log(`  ${chalk.red('⚡ Bash')}`);
     console.log();
+  }
+
+  // === Live slash command popup ===
+
+  /**
+   * Paint a popup of matching slash commands below the current input line.
+   * Called on every keystroke while the input starts with '/'.
+   */
+  private updateSlashPopup(): void {
+    if (!process.stdout.isTTY) return;
+    const line = this.rl.line;
+    if (!line.startsWith('/')) {
+      this.clearSlashPopup();
+      return;
+    }
+
+    const all: Array<[string, string]> = [
+      ...Object.entries(GrokChat.SLASH_COMMANDS),
+      ...this.customCommands.map((c): [string, string] => [
+        `/${c.name}`,
+        `${c.source === 'project' ? '[project]' : '[user]'} ${c.description}`,
+      ]),
+    ];
+
+    const matches = all.filter(([cmd]) => cmd.toLowerCase().startsWith(line.toLowerCase()));
+    const display = matches.slice(0, 7); // cap popup height
+
+    // Always clear previous popup first
+    this.clearSlashPopup();
+
+    if (display.length === 0) return;
+
+    // Save cursor position, draw popup below, restore cursor.
+    const out = process.stdout;
+    out.write('\x1B[s'); // save cursor
+
+    for (const [cmd, desc] of display) {
+      out.write('\n\x1B[2K'); // newline + clear line
+      const pad = cmd.padEnd(16);
+      out.write(chalk.dim('  ') + chalk.cyan(pad) + '  ' + chalk.dim(desc));
+    }
+    if (matches.length > display.length) {
+      out.write('\n\x1B[2K');
+      out.write(chalk.dim(`  … (+${matches.length - display.length} more — keep typing)`));
+      this.slashPopupLines = display.length + 1;
+    } else {
+      this.slashPopupLines = display.length;
+    }
+
+    out.write('\x1B[u'); // restore cursor
+    this.slashPopupActive = true;
+  }
+
+  /** Clear the slash popup lines below the prompt. */
+  private clearSlashPopup(): void {
+    if (!this.slashPopupActive || !process.stdout.isTTY) {
+      this.slashPopupActive = false;
+      this.slashPopupLines = 0;
+      return;
+    }
+    const out = process.stdout;
+    out.write('\x1B[s'); // save cursor
+    for (let i = 0; i < this.slashPopupLines; i++) {
+      out.write('\n\x1B[2K');
+    }
+    out.write('\x1B[u'); // restore cursor
+    this.slashPopupActive = false;
+    this.slashPopupLines = 0;
+  }
+
+  // === Shell escape and memory add ===
+
+  /** Run a shell command immediately via Bash tool, bypassing Grok. */
+  private async runShellEscape(command: string): Promise<void> {
+    console.log(SAFFRON('● ') + chalk.bold('Bash') + chalk.dim('(') + chalk.white(command) + chalk.dim(')'));
+    const spinner = startSpinner('Running…');
+    try {
+      const result = await executeTool('Bash', { command });
+      spinner.stop();
+      if (result.success) {
+        const lines = result.output.split('\n').slice(0, 20);
+        console.log('  ' + chalk.dim('⎿  ') + chalk.dim(`${result.output.split('\n').length} line(s) of output`));
+        for (const l of lines) {
+          console.log('  ' + chalk.dim('│ ') + l.slice(0, 200));
+        }
+        if (result.output.split('\n').length > 20) {
+          console.log('  ' + chalk.dim('│ ') + chalk.dim('… (output truncated)'));
+        }
+      } else {
+        console.log('  ' + chalk.dim('⎿  ') + chalk.red(result.error || 'Failed'));
+      }
+    } catch (e) {
+      spinner.stop();
+      console.log('  ' + chalk.dim('⎿  ') + chalk.red((e as Error).message));
+    }
+    console.log();
+  }
+
+  /** Quick-add a line to GROK.md memory. Prompts for scope (project/global). */
+  private async handleMemoryAdd(text: string): Promise<void> {
+    const options: SelectorOption[] = [
+      { label: 'Project memory', value: 'project', description: './GROK.md' },
+      { label: 'Global memory', value: 'global', description: '~/.grok/GROK.md' },
+    ];
+    const scope = await interactiveSelect('Add to which memory?', options);
+    if (!scope) {
+      console.log(chalk.dim('  Cancelled.'));
+      return;
+    }
+    await this.addToMemory(text, scope as 'project' | 'global');
+    console.log(chalk.dim('  ') + INDIA_GREEN('✓') + chalk.dim(` Saved to ${scope === 'global' ? '~/.grok/GROK.md' : 'GROK.md'}`));
   }
 
   // === Image attachment ===
@@ -1282,6 +1893,11 @@ Provide specific, actionable feedback.`;
   // === Core processing ===
 
   private async processMessage(input: string, opts: { quietPrompt?: boolean } = {}): Promise<void> {
+    // Snapshot the current message array for /back undo. Cap the stack at
+    // 20 to avoid unbounded memory use in long sessions.
+    this.undoStack.push(this.messages.map((m) => ({ ...m })));
+    if (this.undoStack.length > 20) this.undoStack.shift();
+
     // Extract @image.png references and load them as attachments
     const { text, paths } = extractImageReferences(input);
     let finalText = text || input;
