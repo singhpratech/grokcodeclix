@@ -440,7 +440,20 @@ export class GrokChat {
 
     await this.initSession(true);
     try {
-      await this.processMessage(prompt, { quietPrompt: true });
+      const trimmed = prompt.trim();
+
+      // Slash commands and prefixes need to be routed through the same
+      // handlers as the interactive loop — otherwise `grok chat "/init"`
+      // would just send the literal text "/init" to Grok as a user
+      // message instead of running handleInit.
+      if (trimmed.startsWith('/') && trimmed !== '/') {
+        await this.handleCommand(trimmed);
+      } else if (trimmed.startsWith('!')) {
+        const cmd = trimmed.slice(1).trim();
+        if (cmd) await this.runShellEscape(cmd);
+      } else {
+        await this.processMessage(prompt, { quietPrompt: true });
+      }
     } catch (error) {
       const err = error as Error;
       console.error(chalk.red(`Error: ${err.message}`));
@@ -1408,58 +1421,126 @@ export class GrokChat {
 
   private async handleInit(): Promise<void> {
     const grokMdPath = path.join(process.cwd(), 'GROK.md');
+    const cwd = process.cwd();
 
+    // Refuse to overwrite an existing GROK.md
     try {
       await fs.access(grokMdPath);
-      console.log(chalk.yellow('  GROK.md already exists. Edit it directly or delete to re-init.'));
+      console.log(chalk.yellow('  GROK.md already exists in this project.'));
+      console.log(chalk.dim('  Delete it first or use /memory edit to modify.'));
       return;
     } catch {
-      // create
+      // doesn't exist — good, proceed
     }
 
-    const template = `# ${path.basename(process.cwd())}
-
-## What this project does
-<!-- Short description of the project's purpose -->
-
-## Tech stack
-<!-- Main languages, frameworks, libraries -->
-
-## Project structure
-<!-- Key directories and what lives in them -->
-
-## Coding conventions
-<!-- Style rules: naming, formatting, file layout, imports -->
-
-## Common commands
-\`\`\`bash
-# Install
-# Build
-# Test
-# Run dev server
-\`\`\`
-
-## Notes for Grok
-- Read files before editing
-- Match existing code style
-- Run tests after changes
-- Use Bash for git and npm operations
-`;
-
-    await fs.writeFile(grokMdPath, template, 'utf-8');
-
-    // Also scaffold .grok/commands/ dir
+    // Scaffold the .grok/commands/ directory alongside GROK.md
     await initCommandsDir();
 
-    // Reload into current session
-    await this.loadProjectContext();
-    this.messages[0] = {
-      role: 'system',
-      content: buildSystemPrompt(process.cwd(), this.workingDirs, this.projectContext),
-    };
+    console.log();
+    console.log(SAFFRON('✻ ') + chalk.bold('Initializing project memory…'));
+    console.log(chalk.dim('  Analyzing the codebase and generating GROK.md with real content.'));
+    console.log();
 
-    console.log(chalk.green('  ✓ Created GROK.md and .grok/commands/'));
-    console.log(chalk.dim('  Contents are automatically included in the system prompt.'));
+    // Agentic init: direct, imperative prompt that ends with an
+    // unambiguous "call Write" instruction. Matches Claude Code /init.
+    const initPrompt = `TASK: Create \`${cwd}/GROK.md\` — a project memory file that you (Grok Code) will read on every future session to understand this codebase.
+
+This is a TOOL-CALL task. Your job is to use tools to investigate and then call the Write tool to create the file. Do NOT just describe what you would do — actually do it.
+
+STEPS:
+1. Use **Glob** with pattern \`*\` to see top-level files.
+2. **Read** the project manifest (package.json, Cargo.toml, go.mod, pyproject.toml, etc. — whichever exists).
+3. **Read** README.md if it exists.
+4. Use **Glob** with pattern like \`src/**/*\` (or the main source dir's equivalent) to map the source layout. Do not pass a directory to Read — pass individual file paths.
+5. **Read** 2-4 of the most important source files (entry points like \`cli\`, \`main\`, \`index\`, \`app\`).
+6. Optionally **Bash** \`git log --oneline -10\` for recent context.
+7. **Write** \`${cwd}/GROK.md\` using the Write tool. This step is MANDATORY — the task is not complete until Write is called.
+
+FILE CONTENT: 40–80 lines of markdown, every section filled with REAL content you observed. No "<placeholder>", no "TODO", no fictional details. Structure:
+
+\`\`\`markdown
+# <actual project name from manifest>
+
+<One-line tagline from README or manifest description>
+
+## What this project does
+
+<2–3 sentences explaining the actual purpose, based on what you read.>
+
+## Tech stack
+
+- **Language**: <primary language>
+- **Runtime**: <Node.js / Python / Go / Rust / etc. with version if known>
+- **Key dependencies**: <3–6 main libraries with a short note on what each is used for>
+- **Build tools**: <compilation/bundling tools actually in use>
+
+## Project structure
+
+\`\`\`
+<ASCII tree of 4–8 most important dirs/files with 1-line descriptions>
+\`\`\`
+
+## Common commands
+
+\`\`\`bash
+<Real commands from package.json scripts / Makefile / etc. — install, build, test, dev, lint>
+\`\`\`
+
+## Coding conventions
+
+- <2–5 bullets about the style you observed: naming, indentation, import style, typing, test layout>
+
+## Notes for Grok
+
+- <Project-specific guidance from what you saw>
+- Read files before editing them
+- Match the existing code style exactly
+\`\`\`
+
+CRITICAL: You must call the Write tool with \`file_path\` = \`${cwd}/GROK.md\`. Do not end your turn until the Write tool has been called and succeeded. Do not just summarize — the file must exist on disk when you're done.`;
+
+    await this.processMessage(initPrompt);
+
+    // If Grok didn't write the file, send a follow-up nudging it to do so.
+    let exists = false;
+    try {
+      await fs.access(grokMdPath);
+      exists = true;
+    } catch {
+      // not yet
+    }
+
+    if (!exists) {
+      console.log();
+      console.log(chalk.yellow('  ⚠ GROK.md not yet created. Nudging Grok to call Write…'));
+      console.log();
+      await this.processMessage(
+        `You did not call the Write tool. Call **Write** now with \`file_path\` = \`${grokMdPath}\` and \`content\` = the markdown GROK.md body we discussed. Do not respond with anything except the tool call.`
+      );
+      try {
+        await fs.access(grokMdPath);
+        exists = true;
+      } catch {
+        // still not
+      }
+    }
+
+    if (exists) {
+      await this.loadProjectContext();
+      this.messages[0] = {
+        role: 'system',
+        content: buildSystemPrompt(process.cwd(), this.workingDirs, this.projectContext),
+      };
+      console.log();
+      console.log('  ' + INDIA_GREEN('✓') + ' ' + chalk.bold('Project initialized.'));
+      console.log(chalk.dim(`  ${grokMdPath}`));
+      console.log(chalk.dim(`  GROK.md is loaded into the system prompt for this and future sessions.`));
+      console.log();
+    } else {
+      console.log();
+      console.log(chalk.yellow('  ⚠ GROK.md was not created. You can run /init again or write it manually with /memory.'));
+      console.log();
+    }
   }
 
   private async handleReview(focus?: string): Promise<void> {
