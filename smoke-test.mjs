@@ -569,6 +569,20 @@ await section('Claude Code parity features', async () => {
   assert(commandNames.includes('/back'), 'has /back');
   assert(commandNames.includes('/backup'), 'has /backup');
 
+  // Latest additions
+  assert(commandNames.includes('/init'), 'has /init');
+  assert(commandNames.includes('/todos'), 'has /todos');
+  assert(commandNames.includes('/todo'), 'has /todo');
+  assert(commandNames.includes('/vim'), 'has /vim');
+  assert(commandNames.includes('/terminal-setup'), 'has /terminal-setup');
+  assert(commandNames.includes('/upgrade'), 'has /upgrade');
+  assert(commandNames.includes('/feedback'), 'has /feedback');
+  assert(commandNames.includes('/security-review'), 'has /security-review');
+  assert(commandNames.includes('/pr-comments'), 'has /pr-comments');
+
+  // Verify total count is at least 40
+  assert(commandNames.length >= 40, `at least 40 slash commands (have ${commandNames.length})`);
+
   // Clean up the rl so the process can exit
   try {
     chat['rl']?.close();

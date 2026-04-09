@@ -146,6 +146,10 @@ export class GrokChat {
   /** Live slash-popup bookkeeping */
   private slashPopupActive: boolean = false;
   private slashPopupLines: number = 0;
+  /** In-session todo list */
+  private todos: { text: string; done: boolean }[] = [];
+  /** Vim mode for input editing */
+  private vimMode: boolean = false;
 
   // Built-in slash commands with descriptions (matching Claude Code coverage).
   private static SLASH_COMMANDS: Record<string, string> = {
@@ -187,6 +191,8 @@ export class GrokChat {
     '/init': 'Initialize GROK.md in this project',
     '/memory': 'View or edit GROK.md project memory',
     '/review': 'Ask Grok to review recent changes',
+    '/security-review': 'Security review of uncommitted changes',
+    '/pr-comments': 'View comments on a GitHub PR (needs gh)',
     '/add-dir': 'Add a working directory',
     '/pwd': 'Show working directories',
 
@@ -194,6 +200,14 @@ export class GrokChat {
     '/image': 'Attach an image from a file path',
     '/paste': 'Paste image from clipboard',
     '/commands': 'List custom commands',
+
+    // Tasks & utilities
+    '/todos': 'Show in-session todo list',
+    '/todo': 'Add a todo item or toggle one done',
+    '/vim': 'Toggle vim editing mode for input',
+    '/terminal-setup': 'Show terminal setup tips',
+    '/upgrade': 'Show how to update Grok Code',
+    '/feedback': 'Send feedback (opens GitHub Discussions)',
   };
 
   constructor(options: ChatInitOptions) {
@@ -850,6 +864,42 @@ export class GrokChat {
 
       case 'review':
         await this.handleReview(args);
+        break;
+
+      case 'security-review':
+      case 'sec-review':
+        await this.handleSecurityReview();
+        break;
+
+      case 'pr-comments':
+      case 'pr':
+        await this.handlePrComments(args);
+        break;
+
+      // Tasks & utilities
+      case 'todos':
+        this.showTodos();
+        break;
+
+      case 'todo':
+        this.handleTodo(args);
+        break;
+
+      case 'vim':
+        this.toggleVimMode();
+        break;
+
+      case 'terminal-setup':
+        this.showTerminalSetup();
+        break;
+
+      case 'upgrade':
+      case 'update':
+        this.showUpgrade();
+        break;
+
+      case 'feedback':
+        this.showFeedback();
         break;
 
       // Undo / backup
@@ -1569,6 +1619,261 @@ Provide specific, actionable feedback.`;
     await this.processMessage(reviewPrompt);
   }
 
+  // === Security review (agentic) ===
+
+  private async handleSecurityReview(): Promise<void> {
+    const prompt = `Run a focused security review on this project's UNCOMMITTED changes.
+
+Steps:
+1. Use Bash to run \`git status\` and \`git diff\` to see what's changed.
+2. For each modified file, look for these specific issues:
+   - **Injection**: SQL injection, command injection, XSS, prototype pollution
+   - **Auth & secrets**: hardcoded credentials, exposed API keys, weak crypto, missing auth checks
+   - **Path traversal**: unvalidated file paths, missing path normalization
+   - **SSRF**: unvalidated URLs, internal IP access, file:// schemes
+   - **Insecure deserialization**: untrusted JSON.parse without validation, eval/Function
+   - **DoS**: regex catastrophic backtracking, unbounded loops, missing rate limits
+   - **Crypto**: weak algorithms (MD5, SHA1), missing randomness, hardcoded IVs
+
+For each issue found, report:
+- File and line number
+- The vulnerable pattern
+- A concrete fix
+- Severity (low / medium / high / critical)
+
+Be concise and actionable. Do NOT make up issues — only flag what you see in the actual diff.`;
+
+    await this.processMessage(prompt);
+  }
+
+  // === GitHub PR comments (gh wrapper) ===
+
+  private async handlePrComments(args?: string): Promise<void> {
+    if (!args || !args.trim()) {
+      console.log(chalk.yellow('  Usage: /pr-comments <pr-url-or-number>'));
+      console.log(chalk.dim('  Example: /pr-comments 42'));
+      console.log(chalk.dim('  Example: /pr-comments https://github.com/owner/repo/pull/42'));
+      return;
+    }
+
+    // Check gh is installed
+    try {
+      const { execSync } = await import('child_process');
+      execSync('which gh', { stdio: 'pipe' });
+    } catch {
+      console.log(chalk.red('  gh CLI not found. Install: https://cli.github.com/'));
+      return;
+    }
+
+    // Parse PR ref — accept "42", "owner/repo#42", or full URL
+    let prRef = args.trim();
+    let ghArgs: string[];
+    if (/^\d+$/.test(prRef)) {
+      ghArgs = ['pr', 'view', prRef, '--comments'];
+    } else if (prRef.includes('://')) {
+      ghArgs = ['pr', 'view', prRef, '--comments'];
+    } else if (prRef.includes('#')) {
+      const [repo, num] = prRef.split('#');
+      ghArgs = ['pr', 'view', num, '--repo', repo, '--comments'];
+    } else {
+      ghArgs = ['pr', 'view', prRef, '--comments'];
+    }
+
+    console.log(SAFFRON('● ') + chalk.bold('Bash') + chalk.dim('(') + chalk.white(`gh ${ghArgs.join(' ')}`) + chalk.dim(')'));
+    const spinner = startSpinner('Fetching…');
+    try {
+      const result = await executeTool('Bash', { command: `gh ${ghArgs.join(' ')}` });
+      spinner.stop();
+      if (result.success) {
+        console.log('  ' + chalk.dim('⎿  ') + chalk.dim(`fetched ${result.output.length.toLocaleString()} chars`));
+        console.log();
+        console.log(result.output.slice(0, 8000));
+        if (result.output.length > 8000) {
+          console.log(chalk.dim('  … (truncated)'));
+        }
+      } else {
+        console.log('  ' + chalk.dim('⎿  ') + chalk.red(result.error || 'Failed'));
+      }
+    } catch (e) {
+      spinner.stop();
+      console.log('  ' + chalk.dim('⎿  ') + chalk.red((e as Error).message));
+    }
+    console.log();
+  }
+
+  // === Todos ===
+
+  private showTodos(): void {
+    console.log();
+    console.log(chalk.bold('  Todos'));
+    console.log(chalk.dim('  ─────'));
+    if (this.todos.length === 0) {
+      console.log(chalk.dim('  No todos. Add one with /todo <text>'));
+      console.log();
+      return;
+    }
+    this.todos.forEach((t, i) => {
+      const box = t.done ? INDIA_GREEN('☑') : chalk.dim('☐');
+      const text = t.done ? chalk.dim.strikethrough(t.text) : t.text;
+      console.log(`  ${chalk.dim(String(i + 1).padStart(2))} ${box} ${text}`);
+    });
+    const done = this.todos.filter((t) => t.done).length;
+    console.log();
+    console.log(chalk.dim(`  ${done}/${this.todos.length} done`));
+    console.log();
+  }
+
+  private handleTodo(args: string): void {
+    const text = (args || '').trim();
+    if (!text) {
+      console.log(chalk.yellow('  Usage:'));
+      console.log(chalk.dim('    /todo <text>          add a todo'));
+      console.log(chalk.dim('    /todo done <n>        mark todo n as done'));
+      console.log(chalk.dim('    /todo undo <n>        unmark todo n'));
+      console.log(chalk.dim('    /todo rm <n>          remove todo n'));
+      console.log(chalk.dim('    /todo clear           remove all done todos'));
+      return;
+    }
+
+    // Subcommands
+    const m = text.match(/^(done|undo|rm|delete)\s+(\d+)$/i);
+    if (m) {
+      const sub = m[1].toLowerCase();
+      const idx = parseInt(m[2], 10) - 1;
+      if (idx < 0 || idx >= this.todos.length) {
+        console.log(chalk.red(`  No todo at index ${idx + 1}`));
+        return;
+      }
+      if (sub === 'done') {
+        this.todos[idx].done = true;
+        console.log(chalk.dim('  ') + INDIA_GREEN('✓') + chalk.dim(` Marked done: ${this.todos[idx].text}`));
+      } else if (sub === 'undo') {
+        this.todos[idx].done = false;
+        console.log(chalk.dim(`  ↺ Unmarked: ${this.todos[idx].text}`));
+      } else {
+        const removed = this.todos.splice(idx, 1)[0];
+        console.log(chalk.dim(`  Removed: ${removed.text}`));
+      }
+      return;
+    }
+
+    if (text.toLowerCase() === 'clear') {
+      const before = this.todos.length;
+      this.todos = this.todos.filter((t) => !t.done);
+      console.log(chalk.dim(`  Cleared ${before - this.todos.length} done todo(s)`));
+      return;
+    }
+
+    // Default: add a new todo
+    this.todos.push({ text, done: false });
+    console.log(chalk.dim('  ') + INDIA_GREEN('+') + chalk.dim(` ${text}`));
+  }
+
+  // === Vim mode ===
+
+  private toggleVimMode(): void {
+    this.vimMode = !this.vimMode;
+    if (process.stdin.isTTY) {
+      // Best-effort: switch readline keymap
+      try {
+        // Node readline doesn't have a public vim mode API, but the
+        // 'readline' line editing keymap is the only mode it supports.
+        // We track the flag for our own keypress handlers — actual
+        // editing keys are handled by readline's emacs-style binding.
+      } catch {
+        // ignore
+      }
+    }
+    console.log();
+    console.log(SAFFRON('✦ ') + chalk.bold(`Vim mode ${this.vimMode ? chalk.green('on') : chalk.dim('off')}`));
+    if (this.vimMode) {
+      console.log(chalk.dim('  Note: input editing uses emacs-style keys (readline default).'));
+      console.log(chalk.dim('  Vim mode is a placeholder — file an issue if you need full vim bindings.'));
+    }
+    console.log();
+  }
+
+  // === Terminal setup ===
+
+  private showTerminalSetup(): void {
+    console.log();
+    console.log(chalk.bold('  ⌨  Terminal setup'));
+    console.log(chalk.dim('  ─────────────────'));
+    console.log();
+    console.log(chalk.bold('  Recommended shell aliases'));
+    console.log(chalk.dim('  Add to ~/.bashrc or ~/.zshrc:'));
+    console.log();
+    console.log('    ' + chalk.cyan('alias g="grok"'));
+    console.log('    ' + chalk.cyan('alias gr="grok --resume"'));
+    console.log('    ' + chalk.cyan('alias gp="grok --print"   # one-shot non-interactive'));
+    console.log();
+    console.log(chalk.bold('  Environment variables'));
+    console.log();
+    console.log('    ' + chalk.cyan('export XAI_API_KEY="xai-..."'));
+    console.log('    ' + chalk.cyan('export EDITOR="nvim"  # used by /memory edit'));
+    console.log();
+    console.log(chalk.bold('  Clipboard image paste'));
+    console.log();
+    if (process.platform === 'linux') {
+      console.log('    ' + chalk.cyan('sudo apt install xclip       # X11'));
+      console.log('    ' + chalk.cyan('sudo apt install wl-clipboard # Wayland'));
+    } else if (process.platform === 'darwin') {
+      console.log('    ' + chalk.cyan('brew install pngpaste'));
+    } else {
+      console.log('    ' + chalk.dim('(uses built-in PowerShell on Windows — no install needed)'));
+    }
+    console.log();
+    console.log(chalk.bold('  Custom commands directory'));
+    console.log();
+    console.log('    ' + chalk.cyan('mkdir -p ~/.grok/commands       # personal commands'));
+    console.log('    ' + chalk.cyan('mkdir -p .grok/commands         # project commands'));
+    console.log();
+  }
+
+  // === Upgrade ===
+
+  private showUpgrade(): void {
+    console.log();
+    console.log(chalk.bold('  Upgrade Grok Code'));
+    console.log(chalk.dim('  ─────────────────'));
+    console.log();
+    console.log(chalk.dim('  Current version: ') + chalk.white(`v${VERSION}`));
+    console.log();
+    console.log(chalk.bold('  If installed from source (recommended):'));
+    console.log();
+    console.log('    ' + chalk.cyan('cd ~/src/grokcodeclix'));
+    console.log('    ' + chalk.cyan('git pull'));
+    console.log('    ' + chalk.cyan('npm install'));
+    console.log('    ' + chalk.cyan('npm run build'));
+    console.log();
+    console.log(chalk.dim('  The symlink at ~/.local/bin/grok will pick up the new build.'));
+    console.log();
+    console.log(chalk.bold('  If installed via npm:'));
+    console.log();
+    console.log('    ' + chalk.cyan('npm install -g github:singhpratech/grokcodeclix'));
+    console.log();
+    console.log(chalk.bold('  Latest releases:'));
+    console.log('    ' + chalk.cyan('https://github.com/singhpratech/grokcodeclix/releases'));
+    console.log();
+  }
+
+  // === Feedback ===
+
+  private showFeedback(): void {
+    const url = 'https://github.com/singhpratech/grokcodeclix/discussions';
+    console.log();
+    console.log(chalk.bold('  Send feedback'));
+    console.log(chalk.dim('  ─────────────'));
+    console.log();
+    console.log('  We love hearing how Grok Code is working for you.');
+    console.log();
+    console.log('  ' + chalk.bold('Discussions: ') + chalk.cyan(url));
+    console.log('  ' + chalk.bold('Issues:      ') + chalk.cyan('https://github.com/singhpratech/grokcodeclix/issues/new'));
+    console.log();
+    console.log(chalk.dim('  Tip: /bug for a prefilled bug-report URL with your env info.'));
+    console.log();
+  }
+
   // === New Claude-Code-parity handlers ===
 
   private async handleMemory(args?: string): Promise<void> {
@@ -1824,6 +2129,8 @@ Provide specific, actionable feedback.`;
     console.log(`  ${c('/init')}                Initialize GROK.md + .grok/commands/`);
     console.log(`  ${c('/memory')} ${d('[show|edit]')}    View or edit GROK.md`);
     console.log(`  ${c('/review')} ${d('[focus]')}       Code review`);
+    console.log(`  ${c('/security-review')}     Security review of uncommitted changes`);
+    console.log(`  ${c('/pr-comments')} ${d('<ref>')}    GitHub PR comments (needs gh)`);
     console.log(`  ${c('/add-dir')} ${d('<path>')}       Add a working directory`);
     console.log(`  ${c('/pwd')}                 Show working directories`);
     console.log(d('  Memory is loaded from ') + c('~/.grok/GROK.md') + d(' (global) and ') + c('GROK.md') + d(' in cwd/parents.'));
@@ -1835,6 +2142,16 @@ Provide specific, actionable feedback.`;
     console.log(`  ${c('/commands')}            List custom commands`);
     console.log(d('  Inline: drop ') + c('@screenshot.png') + d(' in any message.'));
     console.log(d('  Custom commands live in ') + c('.grok/commands/') + d(' or ') + c('~/.grok/commands/'));
+    console.log();
+
+    console.log(chalk.bold('  Tasks & utilities'));
+    console.log(`  ${c('/todos')}               Show in-session todo list`);
+    console.log(`  ${c('/todo')} ${d('<text>')}          Add a todo`);
+    console.log(`  ${c('/todo done')} ${d('<n>')}       Mark todo n as done`);
+    console.log(`  ${c('/vim')}                 Toggle vim editing mode`);
+    console.log(`  ${c('/terminal-setup')}      Show terminal setup tips`);
+    console.log(`  ${c('/upgrade')}             How to update Grok Code`);
+    console.log(`  ${c('/feedback')}            Send feedback`);
     console.log();
 
     console.log(chalk.bold('  Prefixes (at start of message)'));
