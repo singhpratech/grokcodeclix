@@ -39,46 +39,35 @@ $ grok
   ╚██████╔╝██║  ██║╚██████╔╝██║  ██╗    ╚██████╗╚██████╔╝██████╔╝███████╗
    ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝     ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝
 
-╭──────────────────────────────────────────────────────────────────────╮
-│  Grok Code CLI v0.1.0                                                │
-│                                                                      │
-│  Model:    grok-4-0709                                               │
-│  CWD:      ~/myproject                                               │
-│  Tools:    8 available (Read, Write, Edit, Bash, Glob, Grep, ...)    │
-│                                                                      │
-│  Commands: /help • /model • /doctor • exit                           │
-╰──────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────╮
+│ ✻ ✻ ✻  Welcome to Grok Code!                                │
+│                                                              │
+│   /help for help, /status for your current setup            │
+│                                                              │
+│   cwd: ~/myproject                                           │
+│   ✓ GROK.md loaded                                           │
+╰────────────────────────────────────────────────────────────╯
 
-💡 Tip: Use /model to switch between Grok 4.1, Grok 4, and specialized models
+  ? for shortcuts
+> Help me create a REST API with Express
 
-❯ Help me create a REST API with Express
+● Read(package.json)
+  ⎿  Read 47 lines from package.json
 
-╭──────────────────────────────────────────────────────────────────────╮
-│  🤖 Grok                                                              │
-╰──────────────────────────────────────────────────────────────────────╯
+● Write(src/server.ts)
+  ⎿  Created src/server.ts (34 lines, 812B)
 
-I'll help you create a REST API with Express. Let me start by
-checking your project structure and then create the necessary files.
+● Bash(npm install express)
+  ⎿  3 lines of output
+  │ added 64 packages in 2s
 
-┌─ 📖 Read ─────────────────────────────────────────────────────────────┐
-│ Reading: package.json                                                  │
-└────────────────────────────────────────────────────────────────────────┘
+Done. Created an Express API with these endpoints:
 
-┌─ ✏️ Write ────────────────────────────────────────────────────────────┐
-│ Creating: src/server.ts                                                │
-│ Creating: src/routes/api.ts                                            │
-└────────────────────────────────────────────────────────────────────────┘
+- `GET  /api/users`     — list all users
+- `POST /api/users`     — create a user
+- `GET  /api/users/:id` — get user by ID
 
-┌─ ⚡ Bash ─────────────────────────────────────────────────────────────┐
-│ $ npm install express                                                  │
-└────────────────────────────────────────────────────────────────────────┘
-
-✓ Created Express API with the following endpoints:
-  GET  /api/users     - List all users
-  POST /api/users     - Create a user
-  GET  /api/users/:id - Get user by ID
-
-❯ _
+> _
 ```
 
 ---
@@ -120,108 +109,121 @@ Create custom slash commands for your team. Define project-specific workflows in
 
 ### Welcome Screen
 
-The beautiful welcome screen shows your current model, working directory, and available tools:
+A clean bordered box with the tiranga ✻ accent (saffron · white · green), help hint, and working directory:
 
 ```
-   ██████╗ ██████╗  ██████╗ ██╗  ██╗     ██████╗ ██████╗ ██████╗ ███████╗
-  ██╔════╝ ██╔══██╗██╔═══██╗██║ ██╔╝    ██╔════╝██╔═══██╗██╔══██╗██╔════╝
-  ██║  ███╗██████╔╝██║   ██║█████╔╝     ██║     ██║   ██║██║  ██║█████╗
-  ██║   ██║██╔══██╗██║   ██║██╔═██╗     ██║     ██║   ██║██║  ██║██╔══╝
-  ╚██████╔╝██║  ██║╚██████╔╝██║  ██╗    ╚██████╗╚██████╔╝██████╔╝███████╗
-   ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝     ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝
+╭────────────────────────────────────────────────────────────╮
+│ ✻ ✻ ✻  Welcome to Grok Code!                                │
+│                                                              │
+│   /help for help, /status for your current setup            │
+│                                                              │
+│   cwd: ~/myproject                                           │
+│   ✓ GROK.md loaded                                           │
+│   ✓ 3 custom commands                                        │
+╰────────────────────────────────────────────────────────────╯
 
-╭──────────────────────────────────────────────────────────────────────╮
-│  Grok Code CLI v0.1.0                                                │
-│                                                                      │
-│  Model:    grok-4-0709                                               │
-│  CWD:      /home/user/myproject                                      │
-│  Tools:    8 available (Read, Write, Edit, Bash, Glob, Grep, ...)    │
-│                                                                      │
-│  Commands: /help • /model • /doctor • exit                           │
-╰──────────────────────────────────────────────────────────────────────╯
-
-💡 Tip: Use /compact to reduce context when conversations get long
-
-❯ _
+  ? for shortcuts
+> _
 ```
 
 ### /help Command
 
-Shows all 25+ available slash commands organized by category:
+Shows all **32+** built-in slash commands, input prefixes, and keyboard shortcuts organized by category:
 
 ```
-╭──────────────────────────────────────────────────────────────────────╮
-│  📚 Grok Code CLI - Help                                              │
-╰──────────────────────────────────────────────────────────────────────╯
+  ✻ Grok Code v0.1.21
+  ────────────────────────────────────────────────────────────────
 
-  Session Management
-  ─────────────────────────────────────────────────────────────────
-    /clear              Clear conversation and start fresh
-    /save, /s           Save current conversation
-    /history            Show saved conversations
-    /resume [id]        Resume a previous conversation
-    /rename <name>      Rename current session
-    /export [file]      Export conversation to file
-    /compact [focus]    Reduce context size (keep last 20 messages)
-    /exit, /q           Save and quit
+  Session
+  /clear               Clear the conversation
+  /save                Save the current session
+  /back                Undo the last turn (Ctrl+B)
+  /backup [name]       Save a named backup snapshot (Ctrl+O)
+  /history             Browse previous sessions
+  /resume [id]         Resume a previous session
+  /rename <name>       Rename the current session
+  /export [file]       Export conversation
+  /compact [focus]     Compact context
+  /exit                Save and quit
 
-  Configuration
-  ─────────────────────────────────────────────────────────────────
-    /config             Show current configuration
-    /model [name]       Show or change the AI model
-    /stream             Toggle streaming mode
-    /permissions        View permission settings
+  Config
+  /model [name]        Show or change the model
+  /plan                Toggle plan mode (Shift+Tab)
+  /stream              Toggle streaming
+  /output-style        Response style (default/concise/verbose)
+  /theme               Color theme
+  /permissions         Permission settings
+  /config              Show configuration
+  /login               Authenticate with xAI
+  /logout              Clear credentials
 
-  Status & Info
-  ─────────────────────────────────────────────────────────────────
-    /status             Show session status and info
-    /context            Visualize context usage
-    /cost               Show token usage and estimated cost
-    /usage              Show usage statistics
-    /doctor             Run diagnostics check
-    /version            Show version
+  Info
+  /status              Session status
+  /context             Context window usage
+  /cost                Token usage and cost
+  /usage               Usage stats
+  /doctor              Run diagnostics
+  /version             Show version
+  /release-notes       Recent changes
+  /bug                 Report a bug on GitHub
 
-  ✓ 25+ slash commands available!
+  Project & memory
+  /init                Initialize GROK.md + .grok/commands/
+  /memory [show|edit]  View or edit GROK.md
+  /review [focus]      Code review
+  /add-dir <path>      Add a working directory
+  /pwd                 Show working directories
+
+  Images & custom commands
+  /image <path>        Attach an image from file
+  /paste               Paste image from clipboard
+  /commands            List custom commands
+
+  Prefixes (at start of message)
+  !<command>           Run shell command directly (bypasses Grok)
+  #<note>              Add a note to GROK.md memory
+  /<command>           Run a slash command
+  ?                    Show this help
+
+  Keyboard shortcuts
+  Tab          Autocomplete slash command
+  Shift+Tab    Toggle plan mode
+  Ctrl+B       Undo last turn (back)
+  Ctrl+O       Save backup snapshot
+  Ctrl+L       Clear screen
+  Esc          Stop streaming response
+  Ctrl+C       Abort current action / exit
+  Ctrl+D       Exit
+
+  Tools
+  📖 Read   🔍 Glob   🔎 Grep   🌐 WebFetch   🔍 WebSearch
+  ✏️  Write   🔧 Edit
+  ⚡ Bash
 ```
 
 ### /model Command
 
-Beautiful model selection with Grok 4.1 reasoning and fast variants:
+Interactive model picker with arrow-key navigation. Defaults to **grok-4-1-fast-reasoning** (latest):
 
 ```
-╭──────────────────────────────────────────────────────────────────────╮
-│  🤖 Model Selection                                                   │
-╰──────────────────────────────────────────────────────────────────────╯
+  Select model:
+  ↑↓/Tab to navigate, Enter to select, Esc to cancel
+❯ grok-4-1-fast-reasoning (current) - reasoning
+  grok-4-1-fast-non-reasoning - fast
+  grok-4-0709
+  grok-4-fast-reasoning - reasoning
+  grok-4-fast-non-reasoning - fast
+  grok-3
+  grok-3-mini - small/fast
+  grok-2-vision-1212 - vision
+  grok-code-fast-1
+```
 
-  Current Model: grok-4-0709
+Or skip the picker and switch directly:
 
-  ⭐ Grok 4.1 (Latest)
-  ─────────────────────────────────────────────────────────────────
-    🧠 grok-4-1-fast-reasoning [REASONING]
-    ⚡ grok-4-1-fast-non-reasoning [FAST]
-
-  🚀 Grok 4
-  ─────────────────────────────────────────────────────────────────
-    • grok-4-0709 ← current (recommended)
-    🧠 grok-4-fast-reasoning [REASONING]
-    ⚡ grok-4-fast-non-reasoning [FAST]
-
-  📦 Grok 3
-  ─────────────────────────────────────────────────────────────────
-    • grok-3
-    • grok-3-mini
-
-  📷 Grok 2 (Vision/Image)
-  ─────────────────────────────────────────────────────────────────
-    • grok-2-image-1212
-    • grok-2-vision-1212
-
-  🔧 Specialized
-  ─────────────────────────────────────────────────────────────────
-    • grok-code-fast-1
-
-  10 models available • Use /model <name> to switch
-  🧠 = Reasoning (best for complex tasks) • ⚡ = Fast (quick responses)
+```
+> /model grok41
+  ✓ Switched to grok-4-1-fast-reasoning
 ```
 
 ### /doctor Command
@@ -229,18 +231,57 @@ Beautiful model selection with Grok 4.1 reasoning and fast variants:
 Comprehensive diagnostics to ensure everything is working:
 
 ```
-╭──────────────────────────────────────────────────────────────────────╮
-│  🩺 Grok Code CLI - Diagnostics                                       │
-╰──────────────────────────────────────────────────────────────────────╯
+  Running diagnostics…
 
-  ✓ API Key          Configured
-  ✓ Node.js          v18.19.1 (>=18 required)
-  ✓ Working Dir      Read/write access OK
-  ✓ Config Dir       /home/user/.config/grokcodecli
-  ✓ Git              Available
-  ✓ API Connection   Connected (10 models)
+  ✓ API Key          configured
+  ✓ Node.js          v22.22.2 (≥18 required)
+  ✓ Working Dir      r/w access
+  ✓ Config Dir       /home/user/.config/grokcodecli-nodejs
+  ✓ Git              available
+  ✓ Global memory    ~/.grok/GROK.md
+  ✓ Project memory   GROK.md
+  ✓ Custom commands  3 loaded
+  ✓ Clipboard tool   xclip available
+  ✓ API Connection   10 models available
 
-  All checks passed! Grok Code is ready to use.
+  All checks passed.
+```
+
+### /status Command
+
+Sectioned status view showing model, session state, context usage, and project context:
+
+```
+  ✻ Grok Code Status
+  ────────────────
+
+  Version & model
+    Version:   0.1.21
+    Model:     grok-4-1-fast-reasoning
+    Mode:      🧠 Thinking
+    Streaming: on
+    Style:     default
+
+  Session
+    Title:     Welcome to Grok Code!
+    ID:        a3f9e21b
+    Messages:  18 (6 user, 6 grok, 6 tools)
+    Uptime:    12m 04s
+    Undo:      5 snapshot(s) available
+
+  Context
+    Used:      ~12,400 / 256,000 tokens (4%)
+    Tokens:    24,812 this session
+
+  Project
+    CWD:       /home/user/myproject
+    Memory:    ✓ GROK.md loaded
+    Commands:  ✓ 3 custom
+
+  Environment
+    Platform:  linux x64
+    Node:      v22.22.2
+    Config:    ~/.config/grokcodecli-nodejs/
 ```
 
 ### Authentication Flow
@@ -291,47 +332,84 @@ Beautiful browser-based OAuth-like authentication:
 
 ### Tool Execution
 
-Beautiful colored boxes show tool execution in real-time:
+Claude-Code-style tool invocation display — saffron `●` marker, tool name, args, then a `⎿  summary` line underneath. Edits show a colored `+`/`-` diff:
 
 ```
-❯ Read the package.json file
+> Read the package.json file
 
-╭──────────────────────────────────────────────────────────────────────╮
-│  🤖 Grok                                                              │
-╰──────────────────────────────────────────────────────────────────────╯
+● Read(package.json)
+  ⎿  Read 47 lines from package.json
 
-I'll read the package.json file for you.
+Here's your package.json — the project uses TypeScript with Commander,
+Chalk, Conf, and Glob as runtime deps.
 
-┌─ 📖 Read ─────────────────────────────────────────────────────────────┐
-│ Reading: package.json                                                  │
-│ Lines: 1-35                                                            │
-│ Size: 1.2KB                                                            │
-└────────────────────────────────────────────────────────────────────────┘
+> Now change the name to "my-cli"
 
-Here's your package.json:
-...
+● Edit(package.json)
+  ⎿  Updated package.json with 1 addition and 1 removal
+     2 -   "name": "grokcodecli",
+     2 +   "name": "my-cli",
+     3    "version": "0.1.21",
+
+Done.
 ```
 
 ---
 
 ## Quick Start
 
+### Requirements
+
+- **Node.js ≥ 18** (check with `node --version`)
+- **git** (for cloning)
+- An xAI API key (any paid Grok plan — SuperGrok, Grok Heavy, or pay-as-you-go — or you can create one at [console.x.ai](https://console.x.ai/))
+
 ### Installation
 
-#### Option 1: Install from npm (Recommended)
+#### Option 1: No-sudo install from GitHub (recommended)
 
 ```bash
-npm install -g grokcodecli
-```
-
-#### Option 2: Install from Source
-
-```bash
-git clone https://github.com/singhpratech/grokcodeclix.git
-cd grokcodeclix
+# Clone and build
+git clone https://github.com/singhpratech/grokcodeclix.git ~/src/grokcodeclix
+cd ~/src/grokcodeclix
 npm install
 npm run build
-npm link
+
+# Symlink into your PATH (no sudo needed)
+mkdir -p ~/.local/bin
+ln -sf "$PWD/dist/cli.js" ~/.local/bin/grok
+chmod +x dist/cli.js
+
+# Ensure ~/.local/bin is in PATH (add to ~/.bashrc or ~/.zshrc if missing)
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Then `grok` works anywhere.
+
+#### Option 2: npm global install (needs sudo if prefix is `/usr`)
+
+```bash
+sudo npm install -g github:singhpratech/grokcodeclix
+```
+
+#### Option 3: npm global without sudo (user prefix)
+
+```bash
+mkdir -p ~/.npm-global
+npm config set prefix "$HOME/.npm-global"
+echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+npm install -g github:singhpratech/grokcodeclix
+```
+
+#### Updating
+
+```bash
+cd ~/src/grokcodeclix
+git pull
+npm install
+npm run build
+# The symlink already points at dist/cli.js — no further action needed.
 ```
 
 ### Setup
@@ -425,8 +503,11 @@ That's it! You're ready to go.
 |---------|-------------|
 | **Persistent History** | Auto-save conversations with full context preservation |
 | **Resume Sessions** | Pick up exactly where you left off with `/resume` |
+| **Named Backups** | `Ctrl+O` or `/backup [name]` snapshots the session to disk |
+| **Undo Stack** | `Ctrl+B` or `/back` rewinds the last turn (up to 20 snapshots) |
 | **Export Conversations** | Save chats to markdown for documentation |
 | **Context Visualization** | Track token usage with visual progress bars |
+| **Auto-compact** | Old messages are compacted automatically at 80% context |
 
 ### Security Hardened
 
@@ -441,11 +522,19 @@ That's it! You're ready to go.
 
 | Feature | Description |
 |---------|-------------|
-| **25+ Slash Commands** | Comprehensive command set for every workflow |
-| **Custom Commands** | Create your own commands in `.grok/commands/` |
-| **Syntax Highlighting** | Beautiful code output with language detection |
-| **Diagnostic Tools** | `/doctor` command validates your entire setup |
-| **Smart Model Matching** | Type `grok4` or `grok 3` - we'll figure it out |
+| **32+ Slash Commands** | Comprehensive command set for every workflow |
+| **Live `/` Popup** | Matching commands appear as you type, like Claude Code |
+| **Custom Commands** | Create your own commands in `.grok/commands/` or `~/.grok/commands/` |
+| **Project Memory** | `GROK.md` files walked up from cwd, plus a global `~/.grok/GROK.md` |
+| **Image / Vision Support** | `@file.png` references, `/image`, and `/paste` from clipboard |
+| **Syntax Highlighting** | Terminal markdown renderer with per-language code coloring |
+| **Tiranga Theme** | Saffron · white · green palette 🇮🇳 (switchable via `/theme`) |
+| **Plan Mode** | Read-only mode for safe exploration — toggle with `Shift+Tab` |
+| **Undo Stack** | `Ctrl+B` / `/back` to revert the last turn |
+| **Shell Escape** | `!command` runs directly via Bash, bypassing Grok |
+| **Quick Memory Add** | `#note` appends to `GROK.md` on the fly |
+| **Diagnostic Tools** | `/doctor` validates config, memory, custom commands, clipboard tools |
+| **Smart Model Matching** | Type `grok41` or `4.1` — we'll figure it out |
 
 ---
 
@@ -456,39 +545,18 @@ Grok Code **automatically fetches the latest models** from the xAI API. When xAI
 ### Current Models (Auto-Updated)
 
 ```
-╭──────────────────────────────────────────────────────────────────────╮
-│  🤖 Model Selection                                                   │
-╰──────────────────────────────────────────────────────────────────────╯
+Select model:
+↑↓/Tab to navigate, Enter to select, Esc to cancel
 
-  Current Model: grok-4-0709
-
-  ⭐ Grok 4.1 (Latest)
-  ─────────────────────────────────────────────────────────────────
-    🧠 grok-4-1-fast-reasoning [REASONING]
-    ⚡ grok-4-1-fast-non-reasoning [FAST]
-
-  🚀 Grok 4
-  ─────────────────────────────────────────────────────────────────
-    • grok-4-0709 ← current (recommended)
-    🧠 grok-4-fast-reasoning [REASONING]
-    ⚡ grok-4-fast-non-reasoning [FAST]
-
-  📦 Grok 3
-  ─────────────────────────────────────────────────────────────────
-    • grok-3
-    • grok-3-mini
-
-  📷 Grok 2 (Vision/Image)
-  ─────────────────────────────────────────────────────────────────
-    • grok-2-image-1212
-    • grok-2-vision-1212
-
-  🔧 Specialized
-  ─────────────────────────────────────────────────────────────────
-    • grok-code-fast-1
-
-  10 models available • Use /model <name> to switch
-  🧠 = Reasoning (best for complex tasks) • ⚡ = Fast (quick responses)
+❯ grok-4-1-fast-reasoning (current) - reasoning
+  grok-4-1-fast-non-reasoning       - fast
+  grok-4-0709
+  grok-4-fast-reasoning              - reasoning
+  grok-4-fast-non-reasoning          - fast
+  grok-3
+  grok-3-mini                        - small/fast
+  grok-2-vision-1212                 - vision
+  grok-code-fast-1
 ```
 
 > **🧠 Reasoning Models:** Recommended for complex coding tasks - they provide step-by-step thinking for better accuracy.
@@ -497,24 +565,25 @@ Grok Code **automatically fetches the latest models** from the xAI API. When xAI
 
 ### Smart Model Matching
 
-You don't need to type exact model names. Grok Code uses intelligent matching:
+You don't need to type exact model names. Grok Code normalizes partial input against the live model list from the xAI API:
 
 | You Type | Matches |
 |----------|---------|
-| `grok41` | grok-4-1-fast-non-reasoning |
-| `grok 4 1` | grok-4-1-fast-non-reasoning |
+| `grok41` | grok-4-1-fast-reasoning |
+| `grok 4 1` | grok-4-1-fast-reasoning |
 | `grok4` | grok-4-0709 |
-| `4.1` | grok-4-1-fast-non-reasoning |
+| `4.1` | grok-4-1-fast-reasoning |
 | `reasoning` | grok-4-1-fast-reasoning |
+| `fast` | grok-4-1-fast-non-reasoning |
 | `vision` | grok-2-vision-1212 |
 | `code` | grok-code-fast-1 |
 | `mini` | grok-3-mini |
 
 ```bash
 # All of these work:
-/model grok41        # → grok-4-1-fast-non-reasoning
-/model grok4         # → grok-4-0709
-/model reasoning     # → grok-4-1-fast-reasoning
+/model grok41        # → grok-4-1-fast-reasoning
+/model 4.1           # → grok-4-1-fast-reasoning
+/model fast          # → grok-4-1-fast-non-reasoning
 /model vision        # → grok-2-vision-1212
 /model code          # → grok-code-fast-1
 ```
@@ -523,7 +592,7 @@ You don't need to type exact model names. Grok Code uses intelligent matching:
 
 ## Slash Commands
 
-Grok Code includes **25+ built-in commands** for every workflow:
+Grok Code includes **32+ built-in commands** for every workflow. Start typing `/` and a live popup shows matching commands as you type — just like Claude Code.
 
 ### Session Management
 
@@ -531,6 +600,8 @@ Grok Code includes **25+ built-in commands** for every workflow:
 |---------|-------|-------------|
 | `/clear` | `/c` | Clear conversation and start fresh |
 | `/save` | `/s` | Save current conversation |
+| `/back` | `/undo` | Undo the last turn (paired with **Ctrl+B**) |
+| `/backup [name]` | | Save a named snapshot to `~/.config/grokcodecli/backups/` (**Ctrl+O**) |
 | `/history` | | Show saved conversations with timestamps |
 | `/resume [id]` | | Resume a previous conversation |
 | `/rename <name>` | | Rename current session |
@@ -544,45 +615,69 @@ Grok Code includes **25+ built-in commands** for every workflow:
 |---------|-------------|
 | `/config` | Show current configuration settings |
 | `/model [name]` | Show available models or switch to a different model |
+| `/plan` | Toggle plan mode — blocks Write/Edit/Bash (**Shift+Tab**) |
 | `/stream` | Toggle streaming mode on/off |
+| `/output-style` | Set response style: **default** / **concise** / **verbose** |
+| `/theme` | Change color theme: **tiranga** / **claude** / **mono** |
 | `/permissions` | View permission settings and risk levels |
+| `/login` | Authenticate with xAI (opens browser to console.x.ai) |
+| `/logout` | Clear stored credentials |
 
 ### Status & Diagnostics
 
 | Command | Description |
 |---------|-------------|
-| `/status` | Show session status, model, uptime, and message count |
+| `/status` | Sectioned status: model, session, context, project, environment |
 | `/context` | Visualize context usage with progress bar |
 | `/cost` | Show token usage and estimated cost |
 | `/usage` | Show detailed usage statistics |
 | `/doctor` | Run comprehensive diagnostics check |
 | `/version` | Show Grok Code version |
+| `/release-notes` | Show recent changes (CHANGELOG.md or last 10 git commits) |
+| `/bug` | Prefilled GitHub issue URL with your env info |
 
-### Project Setup
+### Project Setup & Memory
 
 | Command | Description |
 |---------|-------------|
-| `/init` | Initialize project with GROK.md configuration file |
+| `/init` | Scaffold `GROK.md` and `.grok/commands/` in the current project |
+| `/memory [show\|edit]` | View `GROK.md` or open it in `$EDITOR` (reloads on save) |
 | `/review [focus]` | Request AI code review with optional focus area |
-| `/terminal-setup` | Show terminal configuration tips |
-
-### Working Directory
-
-| Command | Description |
-|---------|-------------|
 | `/add-dir <path>` | Add a working directory to the session |
 | `/pwd` | Show current working directories |
 
-### Quick Reference
+### Images & Custom Commands
 
-| Alias | Full Command | Description |
-|-------|--------------|-------------|
-| `/h` | `/help` | Show help |
-| `/c` | `/clear` | Clear conversation |
-| `/s` | `/save` | Save conversation |
-| `/q` | `/exit` | Quit |
-| `exit` | `/exit` | Quit (natural language) |
-| `quit` | `/exit` | Quit (natural language) |
+| Command | Description |
+|---------|-------------|
+| `/image <path>` | Attach an image file to the next message (vision) |
+| `/paste` | Paste image from clipboard (needs `xclip`/`wl-paste`/`pngpaste`) |
+| `/commands` | List custom commands loaded from `.grok/commands/` and `~/.grok/commands/` |
+
+### Input Prefixes
+
+Type these at the start of your message for quick actions:
+
+| Prefix | Action |
+|--------|--------|
+| `!<command>` | **Shell escape** — runs the command via Bash tool directly, bypassing Grok |
+| `#<note>` | **Quick-add to memory** — appends a line to `GROK.md` (asks project or global) |
+| `/<command>` | Run a slash command |
+| `@<path.png>` | Inline image reference — auto-attached to the message |
+| `?` | Show help |
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Autocomplete slash command |
+| `Shift+Tab` | Toggle plan mode |
+| `Ctrl+B` | Undo last turn (back) |
+| `Ctrl+O` | Save backup snapshot |
+| `Ctrl+L` | Clear screen |
+| `Esc` | Stop streaming response |
+| `Ctrl+C` | Abort current action / exit |
+| `Ctrl+D` | Exit |
 
 ---
 
@@ -837,40 +932,34 @@ Grok Code uses a **granular permission system** to keep you in control:
 
 ### Permission Prompt
 
-When Grok wants to use a tool, you'll see a beautifully formatted prompt:
+When Grok wants to use a tool, you see a Claude-Code-style numbered question with a tool-specific wording:
 
 ```
-╭─────────────────────────────────────────────────────────────────╮
-│ ⚡ Permission Request: Bash                                     │
-├─────────────────────────────────────────────────────────────────┤
-│ Execute command: npm install express                            │
-├─────────────────────────────────────────────────────────────────┤
-│ command: npm install express                                    │
-│ timeout: 120000                                                 │
-╰─────────────────────────────────────────────────────────────────╯
+● Bash(npm install express)
 
-  [y] Yes, allow once
-  [a] Allow for this session
-  [n] No, deny
-  [!] Deny and block for session
+  Do you want to run this command?
+❯ 1. Yes
+  2. Yes, and don't ask again this session
+  3. No, and tell Grok what to do differently (esc)
 ```
+
+The question adapts to the tool: `"Do you want to make this edit?"` for Edit, `"Do you want to create/overwrite this file?"` for Write, etc.
 
 ### Risk Levels
 
-| Level | Icon | Color | Tools | Description |
-|-------|------|-------|-------|-------------|
-| **Read** | 📖 | Green | Read, Glob, Grep, WebFetch, WebSearch | Safe operations that only read data |
-| **Write** | ✏️ | Yellow | Write, Edit | Modifies files but reversible |
-| **Execute** | ⚡ | Red | Bash | Runs commands with system access |
+| Level | Color | Tools | Description |
+|-------|-------|-------|-------------|
+| **Read** | Green | Read, Glob, Grep, WebFetch, WebSearch | Safe operations that only read data |
+| **Write** | Yellow | Write, Edit | Modifies files but reversible |
+| **Execute** | Red | Bash | Runs commands with system access |
 
 ### Permission Responses
 
-| Key | Action | Scope |
-|-----|--------|-------|
-| `y` | Allow | This request only |
-| `a` | Allow | All similar requests this session |
-| `n` | Deny | This request only |
-| `!` | Block | All similar requests this session |
+| Choice | Action | Scope |
+|--------|--------|-------|
+| `1. Yes` | Allow | This request only |
+| `2. Yes, and don't ask again` | Allow | All similar requests this session |
+| `3. No, and tell Grok…` or `Esc` | Deny | This request only |
 
 ### Auto-Approve Configuration
 
@@ -960,6 +1049,124 @@ Usage: `/fix-issue 123`
 
 ---
 
+## Memory System
+
+Grok Code uses the same memory hierarchy as Claude Code — a `GROK.md` file that's automatically injected into the system prompt so Grok knows how *your* project works before you have to tell it.
+
+### Memory Hierarchy
+
+At startup, Grok Code walks this chain and concatenates every `GROK.md` it finds (nearest wins on conflicts):
+
+1. **Global memory** — `~/.grok/GROK.md` — applies to every project on this machine
+2. **Project memory** — `./GROK.md` walked up from `cwd` → `$HOME` — per-project context
+
+Both are loaded into the system prompt under `# Project context`.
+
+### Creating Memory Files
+
+```bash
+# One-shot initializer — creates GROK.md and .grok/commands/
+grok
+> /init
+```
+
+The generated `GROK.md` looks like this:
+
+```markdown
+# myproject
+
+## What this project does
+<!-- Short description of the project's purpose -->
+
+## Tech stack
+<!-- Main languages, frameworks, libraries -->
+
+## Project structure
+<!-- Key directories and what lives in them -->
+
+## Coding conventions
+<!-- Style rules: naming, formatting, file layout, imports -->
+
+## Notes for Grok
+- Read files before editing
+- Match existing code style
+- Run tests after changes
+```
+
+### Quick-Add to Memory
+
+Start any message with `#` to append a note — Grok Code asks whether you want it in project memory or global memory:
+
+```
+> #always prefer 2-space indent in this repo
+  Add to which memory?
+❯ Project memory   — ./GROK.md
+  Global memory    — ~/.grok/GROK.md
+
+  ✓ Saved to GROK.md
+```
+
+The system prompt reloads immediately — no restart needed.
+
+### View or Edit Memory
+
+```
+/memory              # show contents
+/memory show         # same as above
+/memory edit         # open GROK.md in $EDITOR ($VISUAL / nano fallback)
+```
+
+---
+
+## Vision & Image Support
+
+Grok Code can see images — screenshots, diagrams, error modals, whiteboard photos — using Grok's multimodal vision. Three ways to attach:
+
+### 1. Inline `@path` Reference
+
+Drop a file path in your message:
+
+```
+> @screenshot.png what error is this showing?
+
+  📎 Attached screenshot.png (124.5KB)
+● (Grok analyzes the image and responds)
+```
+
+Relative and absolute paths both work. Supported formats: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp` (up to 20MB).
+
+### 2. `/image <path>` Slash Command
+
+Attach an image to your *next* message:
+
+```
+> /image ~/Pictures/design-mockup.png
+  📎 Attached ~/Pictures/design-mockup.png (284.1KB)
+
+> implement this layout in React
+```
+
+### 3. `/paste` from Clipboard
+
+Take a screenshot with your OS screenshot tool (which copies to clipboard), then:
+
+```
+> /paste
+  📎 Pasted image from clipboard (98.2KB)
+
+> what does this error message mean?
+```
+
+**Clipboard tool required:**
+- **Linux (X11)**: `sudo apt install xclip`
+- **Linux (Wayland)**: `sudo apt install wl-clipboard`
+- **macOS**: `brew install pngpaste`
+- **Windows**: uses PowerShell's `Windows.Forms.Clipboard` (no install needed)
+
+Run `/doctor` to check whether your clipboard tool is installed.
+
+---
+
 ## Security Features
 
 Grok Code includes **enterprise-grade security hardening**:
@@ -1031,32 +1238,37 @@ Blocked Protocols:
 
 ## Configuration
 
-### Config File Location
+### Config File Locations
 
-```
-~/.config/grokcodecli/config.json
-```
+Grok Code uses a layered config system:
+
+| Location | Scope | What it holds |
+|----------|-------|---------------|
+| `~/.config/grokcodecli-nodejs/config.json` | User | API key, default model, temperature, auto-approve, etc. |
+| `~/.grok/GROK.md` | User (global memory) | Global project notes injected into every session |
+| `./GROK.md` (walked up to `$HOME`) | Project | Project-specific notes for Grok |
+| `./.grok/commands/` | Project | Custom slash commands for this repo |
+| `~/.grok/commands/` | User | Custom slash commands available everywhere |
+| `~/.config/grokcodecli/backups/` | User | Named snapshots from `/backup` / `Ctrl+O` |
 
 ### Configuration Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `apiKey` | string | - | Your xAI API key |
-| `model` | string | `grok-4-0709` | Default Grok model (reasoning recommended) |
+| `model` | string | `grok-4-1-fast-reasoning` | Default Grok model |
 | `temperature` | number | `0.7` | Response creativity (0.0 - 1.0) |
 | `maxTokens` | number | `16384` | Maximum response tokens |
-| `streaming` | boolean | `true` | Enable token streaming |
-| `autoApprove` | string[] | `[]` | Tools to auto-approve |
+| `autoApprove` | string[] | `[]` | Tools to auto-approve (e.g. `["Read","Glob","Grep"]` or `["*"]`) |
 
 ### Example Configuration
 
 ```json
 {
   "apiKey": "xai-your-api-key-here",
-  "model": "grok-4-0709",
+  "model": "grok-4-1-fast-reasoning",
   "temperature": 0.7,
   "maxTokens": 16384,
-  "streaming": true,
   "autoApprove": ["Read", "Glob", "Grep"]
 }
 ```
@@ -1177,38 +1389,44 @@ Run `/doctor` to validate your setup:
 ## CLI Options
 
 ```bash
-grok [options]
+grok [options] [prompt...]
 
 Options:
-  -V, --version          Show version number
-  -r, --resume [id]      Resume a previous session
-  -m, --model <model>    Use a specific model
-  -p, --prompt <text>    Start with an initial prompt
-  -h, --help             Show help
+  -V, --version               Show version number
+  -m, --model <model>         Grok model to use (default: grok-4-1-fast-reasoning)
+  -r, --resume [sessionId]    Resume a previous conversation
+  -p, --print                 Print response and exit (non-interactive)
+  -y, --yes                   Auto-approve all tool calls (skip prompts)
+  -h, --help                  Show help
 
 Subcommands:
-  grok auth              Configure API key
-  grok config            Show configuration
-  grok doctor            Run diagnostics
+  grok auth                   Authenticate with xAI API (browser or paste)
+  grok config [--show|--reset] Manage configuration
 ```
 
 ### Examples
 
 ```bash
-# Start a new session
+# Start a new interactive session
 grok
 
-# Resume last session
+# Resume the last session
 grok --resume
 
-# Start with a specific model
-grok --model grok-4-0709
+# Resume a specific session by (partial) id
+grok --resume abc123
 
-# Start with a prompt
-grok --prompt "Help me refactor this function"
+# One-shot prompt (non-interactive — auto-approves all tool calls)
+grok "read package.json and tell me the version"
 
-# Run diagnostics
-grok doctor
+# Pipe input
+git diff | grok "review this diff for bugs"
+
+# Use a specific model
+grok --model grok-4-1-fast-non-reasoning
+
+# Scripting — bypass permission prompts
+grok -y "fix the typo in README.md"
 ```
 
 ---
@@ -1240,36 +1458,43 @@ grokcodeclix/
 │   ├── index.ts               # Public API exports
 │   │
 │   ├── grok/
-│   │   └── client.ts          # xAI Grok API client
+│   │   └── client.ts          # xAI Grok API client (reasoning, search, vision)
 │   │
 │   ├── conversation/
-│   │   ├── chat.ts            # Main interactive loop (900+ lines)
+│   │   ├── chat.ts            # Main interactive loop (~1900 lines)
 │   │   └── history.ts         # Session persistence
 │   │
 │   ├── config/
-│   │   └── manager.ts         # Configuration management
+│   │   └── manager.ts         # Configuration + auth flow
 │   │
 │   ├── permissions/
-│   │   └── manager.ts         # Permission system
+│   │   └── manager.ts         # Permission system (Claude-Code-style prompts)
 │   │
 │   ├── tools/
 │   │   ├── registry.ts        # Tool registration & execution
 │   │   ├── read.ts            # File reading
-│   │   ├── write.ts           # File writing
-│   │   ├── edit.ts            # File editing
+│   │   ├── write.ts           # File writing (with diff display)
+│   │   ├── edit.ts            # File editing (with diff display)
 │   │   ├── bash.ts            # Command execution
 │   │   ├── glob.ts            # File pattern matching
 │   │   ├── grep.ts            # Content search
-│   │   └── webfetch.ts        # HTTP requests
+│   │   ├── webfetch.ts        # HTTP requests
+│   │   └── websearch.ts       # DuckDuckGo web search
 │   │
 │   ├── utils/
-│   │   ├── security.ts        # Security validation
-│   │   └── ui.ts              # UI components
+│   │   ├── markdown.ts        # Terminal markdown renderer
+│   │   ├── diff.ts            # LCS line diff for Edit/Write
+│   │   ├── image.ts           # Image loading + clipboard paste
+│   │   ├── selector.ts        # Interactive arrow-key selector
+│   │   ├── security.ts        # Path/command validation
+│   │   └── ui.ts              # UI helpers
 │   │
 │   └── commands/
 │       └── loader.ts          # Custom command loader
 │
 ├── dist/                      # Compiled JavaScript
+├── smoke-test.mjs             # 114 offline smoke tests
+├── preview.mjs                # Visual UI preview (no API key needed)
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -1279,11 +1504,11 @@ grokcodeclix/
 
 | Metric | Value |
 |--------|-------|
-| Total Lines | ~4,000 |
-| TypeScript Files | 16 |
+| Total Lines | ~5,200 |
+| TypeScript Files | 18 |
 | Tools | 8 |
-| Slash Commands | 25+ |
-| Test Coverage | Growing |
+| Slash Commands | 32+ |
+| Smoke Tests | 114 (all passing) |
 
 ---
 
@@ -1331,14 +1556,23 @@ export PATH="$PATH:$(npm prefix -g)/bin"
 
 | Feature | Grok Code | Claude Code |
 |---------|-----------|-------------|
-| AI Model | xAI Grok | Anthropic Claude |
-| Slash Commands | 25+ | 35+ |
-| Tools | 7 | 10+ |
-| Custom Commands | ✓ | ✓ |
-| Permission System | ✓ | ✓ |
-| Session Persistence | ✓ | ✓ |
-| Streaming | ✓ | ✓ |
+| AI Model | xAI Grok (4.1, 4, 3, vision) | Anthropic Claude |
+| Slash Commands | 32+ | 35+ |
+| Tools | 8 (Read/Write/Edit/Bash/Glob/Grep/WebFetch/WebSearch) | 10+ |
+| Live `/` command popup | ✓ | ✓ |
+| Custom Commands | ✓ (`.grok/commands/`, `~/.grok/commands/`) | ✓ |
+| Project Memory (GROK.md / CLAUDE.md) | ✓ (global + project, walked up) | ✓ |
+| Quick-add to memory (`#` prefix) | ✓ | ✓ |
+| Shell escape (`!` prefix) | ✓ | ✓ |
+| Image / Vision Support | ✓ (`/image`, `/paste`, `@file.png`) | ✓ |
+| Permission System (numbered prompts) | ✓ | ✓ |
+| Plan Mode (Shift+Tab) | ✓ | ✓ |
+| Undo / Back (Ctrl+B) | ✓ | ✓ |
+| Backup Snapshot (Ctrl+O) | ✓ | — |
+| Session Persistence & `/resume` | ✓ | ✓ |
+| Streaming + Reasoning Mode | ✓ | ✓ |
 | Security Hardening | ✓ | ✓ |
+| Custom color themes | ✓ (tiranga / claude / mono) | — |
 | MCP Support | Planned | ✓ |
 | IDE Integration | Planned | ✓ |
 | Cost | xAI pricing | Anthropic pricing |
@@ -1390,11 +1624,27 @@ git push origin feature/your-feature
 
 ## Roadmap
 
+### Shipped
+
+- [x] Image / vision support — `/image`, `/paste`, `@file.png` references
+- [x] Memory hierarchy — `~/.grok/GROK.md` + project `GROK.md` walked up
+- [x] Custom commands — `.grok/commands/` and `~/.grok/commands/`
+- [x] Plan mode — `Shift+Tab` or `/plan`
+- [x] Undo / back — `Ctrl+B` or `/back`
+- [x] Backup snapshots — `Ctrl+O` or `/backup`
+- [x] Shell escape — `!command` prefix
+- [x] Quick memory add — `#note` prefix
+- [x] Live `/` command popup
+- [x] Tiranga color theme (saffron · white · green)
+- [x] Claude-Code-style welcome banner, tool display, and permission prompts
+
+### Planned
+
+- [ ] Live markdown re-render after streaming (repaint for pretty code blocks)
 - [ ] MCP (Model Context Protocol) support
 - [ ] IDE integrations (VS Code, JetBrains)
 - [ ] Multi-file editing mode
-- [ ] Git integration commands
-- [ ] Image/vision support with Grok vision models
+- [ ] Published on npm as `grokcodecli`
 - [ ] Plugin system
 - [ ] Team collaboration features
 
