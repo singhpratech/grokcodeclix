@@ -28,9 +28,10 @@ from pathlib import Path
 SRC = Path('/home/papapratlinux/Documents/grokcodeclix/docs/assets/mascot.png')
 DST_TS = Path('/home/papapratlinux/Documents/grokcodeclix/src/utils/mascot.ts')
 
-TARGET_W = 24    # cell columns. With quarter-block this gives 48px-wide
-                 # subject coverage — wide enough for legible features and
-                 # narrow enough to sit above the welcome box (62 cols).
+TARGET_W = 16    # cell columns. With quarter-block this gives 32px-wide
+                 # subject coverage. Sized to sit small above the welcome
+                 # box without dominating the screen — Claude Code's `✻`
+                 # is a single glyph, our mascot stays close to that vibe.
 
 # Each tuple: (top-left, top-right, bottom-left, bottom-right) of the cell.
 # 1 = foreground, 0 = background.
