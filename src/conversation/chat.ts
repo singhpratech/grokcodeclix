@@ -44,6 +44,24 @@ const VERSION = packageJson.version;
 const SAFFRON = chalk.hex('#FF9933');
 const INDIA_GREEN = chalk.hex('#138808');
 
+// Cheap structural detection — anything that the markdown renderer would
+// transform visibly. Plain prose / file paths / tool descriptions hit the
+// fast path (no rewind = no flicker). Code blocks, headers, lists, bold,
+// italic, blockquotes, tables, links go through the renderer.
+function hasMarkdownMarkers(text: string): boolean {
+  if (text.includes('```')) return true;            // fenced code
+  if (/(^|\n)#{1,6}\s/.test(text)) return true;     // headers
+  if (/(^|\n)\s*[-*]\s/.test(text)) return true;    // bullets
+  if (/(^|\n)\s*\d+\.\s/.test(text)) return true;   // ordered lists
+  if (/(^|\n)>\s/.test(text)) return true;          // blockquote
+  if (/(^|\n)\s*\|.*\|/.test(text)) return true;    // table row
+  if (/\*\*[^*\n]+\*\*/.test(text)) return true;    // bold
+  if (/\*[^*\s][^*\n]*\*/.test(text)) return true;  // italic
+  if (/`[^`\n]+`/.test(text)) return true;          // inline code
+  if (/\[[^\]\n]+\]\([^)\n]+\)/.test(text)) return true; // link
+  return false;
+}
+
 function buildSystemPrompt(cwd: string, workingDirs: string[], projectContext: string): string {
   const dirList = workingDirs.length > 1
     ? '\n' + workingDirs.map((d, i) => `  ${i === 0 ? '→' : ' '} ${d}`).join('\n')
@@ -2464,6 +2482,17 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
       // we print the rendered version once for piped/logged output.
       process.stdout.write(renderMarkdown(content));
       process.stdout.write('\n');
+      return;
+    }
+
+    // FAST PATH: if content has no markdown markers, the raw stream we
+    // already painted is identical to what the renderer would produce.
+    // Skip the cursor-up + clear + repaint dance — that's what made the
+    // end of every reply visibly flicker.
+    if (!hasMarkdownMarkers(content)) {
+      // Make sure we end on a clean newline so the next prompt sits on
+      // its own row.
+      if (!content.endsWith('\n')) process.stdout.write('\n');
       return;
     }
 
