@@ -234,7 +234,7 @@ export class GrokChat {
     this.apiKey = options.apiKey;
 
     // Parse initial model to determine base and mode
-    const initialModel = options.model || 'grok-4-1-fast-reasoning';
+    const initialModel = options.model || 'grok-4-1-fast-non-reasoning';
     this.parseModelMode(initialModel);
     this.client = new GrokClient(options.apiKey, this.getCurrentModel());
 

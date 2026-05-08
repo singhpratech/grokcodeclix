@@ -13,7 +13,7 @@ interface GrokConfig {
 }
 
 const defaults: Omit<GrokConfig, 'apiKey'> = {
-  model: 'grok-4-1-fast-reasoning',
+  model: 'grok-4-1-fast-non-reasoning',
   temperature: 0.7,
   maxTokens: 16384,
   autoApprove: [],

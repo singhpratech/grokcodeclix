@@ -42,7 +42,7 @@ program
   .command('chat', { isDefault: true })
   .description('Start an interactive chat session')
   .argument('[prompt...]', 'Optional prompt to send directly')
-  .option('-m, --model <model>', 'Grok model to use', 'grok-4-1-fast-reasoning')
+  .option('-m, --model <model>', 'Grok model to use', 'grok-4-1-fast-non-reasoning')
   .option('-r, --resume [sessionId]', 'Resume a previous conversation')
   .option('-p, --print', 'Print response and exit (non-interactive)')
   .option('-y, --yes', 'Auto-approve all tool calls (skip permission prompts)')
