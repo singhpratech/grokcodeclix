@@ -2385,63 +2385,84 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
       this.slashPopupSelectedIndex = 0;
     }
 
-    // Clear the previous popup before drawing a new one.
-    this.clearSlashPopup();
-
+    // Build the new popup contents into a buffer first, *then* clear the
+    // previous one and paint the new one in a single operation. This
+    // avoids the visible blink when typing fast, where the old popup
+    // would briefly disappear before the new one rendered.
+    const lines: string[] = [];
     if (matches.length === 0) {
-      // Render a single "no matches" hint so the user gets feedback.
-      const out = process.stdout;
-      out.write('\x1B7');
-      out.write('\n\x1B[2K' + chalk.dim('  no matching commands'));
-      out.write('\x1B8');
-      this.slashPopupLines = 1;
-      this.slashPopupActive = true;
-      return;
+      lines.push(chalk.dim('    no matching commands'));
+    } else {
+      const VISIBLE = 10;
+      const sel = this.slashPopupSelectedIndex;
+      const start = matches.length <= VISIBLE
+        ? 0
+        : Math.max(0, Math.min(matches.length - VISIBLE, sel - Math.floor(VISIBLE / 2)));
+      const end = Math.min(matches.length, start + VISIBLE);
+      const above = start;
+      const below = matches.length - end;
+
+      if (above > 0) lines.push(chalk.dim(`    ↑ ${above} more`));
+      for (let i = start; i < end; i++) {
+        const [cmd, desc] = matches[i];
+        const isSel = i === sel;
+        const pointer = isSel ? SAFFRON('  ▶ ') : '    ';
+        const cmdRender = isSel ? SAFFRON.bold(cmd.padEnd(18)) : chalk.cyan(cmd.padEnd(18));
+        const descRender = isSel ? chalk.white(desc) : chalk.dim(desc);
+        lines.push(pointer + cmdRender + '  ' + descRender);
+      }
+      if (below > 0) lines.push(chalk.dim(`    ↓ ${below} more`));
+      lines.push(chalk.dim('    ↑↓ navigate · Tab insert · Enter run · Esc cancel'));
     }
 
-    // Visible window of 10 items, scrolling around the selection so the
-    // active item stays in view (Claude Code-style).
-    const VISIBLE = 10;
-    const sel = this.slashPopupSelectedIndex;
-    const start = matches.length <= VISIBLE
-      ? 0
-      : Math.max(0, Math.min(matches.length - VISIBLE, sel - Math.floor(VISIBLE / 2)));
-    const end = Math.min(matches.length, start + VISIBLE);
-    const above = start;
-    const below = matches.length - end;
+    this.repaintPopup(lines);
+  }
 
+  /**
+   * Atomically replace whatever popup is currently below the prompt with
+   * the provided lines. Uses *relative* cursor movement (up/down/clear)
+   * instead of DECSC/DECRC so it survives terminal scrolling — the old
+   * save-cursor approach would silently miss the saved position whenever
+   * the popup pushed the buffer past the bottom of the screen.
+   */
+  private repaintPopup(lines: string[]): void {
     const out = process.stdout;
-    out.write('\x1B7'); // DECSC — save cursor
+    const prev = this.slashPopupLines;
+    const next = lines.length;
 
-    let drawn = 0;
-    if (above > 0) {
-      out.write('\n\x1B[2K' + chalk.dim(`    ↑ ${above} more`));
-      drawn++;
-    }
-    for (let i = start; i < end; i++) {
-      const [cmd, desc] = matches[i];
-      const isSel = i === sel;
-      const pointer = isSel ? SAFFRON('  ▶ ') : '    ';
-      const cmdRender = isSel ? SAFFRON.bold(cmd.padEnd(18)) : chalk.cyan(cmd.padEnd(18));
-      const descRender = isSel ? chalk.white(desc) : chalk.dim(desc);
-      out.write('\n\x1B[2K' + pointer + cmdRender + '  ' + descRender);
-      drawn++;
-    }
-    if (below > 0) {
-      out.write('\n\x1B[2K' + chalk.dim(`    ↓ ${below} more`));
-      drawn++;
-    }
-    // Footer hint, Claude Code-style.
-    out.write(
-      '\n\x1B[2K' +
-      chalk.dim('    ↑↓ to navigate · Tab to insert · Enter to run · Esc to dismiss')
-    );
-    drawn++;
+    // Step 1: park readline's idea of cursor on the prompt line. We never
+    // moved off it ourselves, but readline may have repainted, so trust
+    // its current row as our anchor.
+    //
+    // Step 2: walk down `next` lines, writing each (clear + content), and
+    // also clear any leftover lines from the previous popup that aren't
+    // covered by the new one.
+    const totalLines = Math.max(prev, next);
 
-    out.write('\x1B8'); // DECRC — restore cursor
+    // Move *down* one line at a time so we land on a fresh row, write the
+    // content (or clear if past the new popup), then ascend back to the
+    // prompt line at the end.
+    let cursor = 0;
+    for (let i = 0; i < totalLines; i++) {
+      out.write('\n\x1B[2K');
+      cursor++;
+      if (i < next) {
+        out.write(lines[i]);
+      }
+    }
 
-    this.slashPopupLines = drawn;
-    this.slashPopupActive = true;
+    // Now climb back to the prompt line. cursor === totalLines.
+    if (cursor > 0) {
+      out.write(`\x1B[${cursor}A`);
+    }
+    // Restore to readline's expected column. readline will redraw the
+    // prompt the next time the user types — but we want the cursor to
+    // sit at the END of what's been typed *now*, not at column 0.
+    // The cleanest way is to ask readline to re-emit its prompt + line.
+    this.rl.prompt(true);
+
+    this.slashPopupLines = next;
+    this.slashPopupActive = next > 0;
   }
 
   /** Clear the slash popup lines below the prompt. */
@@ -2451,16 +2472,7 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
       this.slashPopupLines = 0;
       return;
     }
-
-    const out = process.stdout;
-    out.write('\x1B7'); // save
-    for (let i = 0; i < this.slashPopupLines; i++) {
-      out.write('\n\x1B[2K');
-    }
-    out.write('\x1B8'); // restore
-
-    this.slashPopupActive = false;
-    this.slashPopupLines = 0;
+    this.repaintPopup([]);
   }
 
   // === Stream → rendered markdown re-render ===
