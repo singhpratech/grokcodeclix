@@ -276,7 +276,7 @@ export class ConfigManager {
 
   async interactive(): Promise<void> {
     await this.show();
-    console.log(chalk.gray('Use `grok config --reset` to reset to defaults.'));
-    console.log(chalk.gray('Use `grok auth` to update your API key.\n'));
+    console.log(chalk.gray('Use `grokclix config --reset` to reset to defaults.'));
+    console.log(chalk.gray('Use `grokclix auth` to update your API key.\n'));
   }
 }

@@ -16,7 +16,7 @@ const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'
 const program = new Command();
 
 program
-  .name('grok')
+  .name('grokclix')
   .description('CLI coding assistant powered by Grok AI')
   .version(packageJson.version);
 
@@ -56,7 +56,7 @@ program
       const success = await config.setupAuth();
 
       if (!success) {
-        console.log(chalk.red('\n  Authentication failed. Please try again with `grok`.\n'));
+        console.log(chalk.red('\n  Authentication failed. Please try again with `grokclix`.\n'));
         process.exit(1);
       }
 

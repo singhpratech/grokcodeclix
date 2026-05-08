@@ -16,7 +16,7 @@ set -euo pipefail
 REPO_URL="${GROK_CODE_REPO_URL:-https://github.com/singhpratech/grokcodeclix.git}"
 INSTALL_ROOT="${GROK_CODE_HOME:-$HOME/.grok-code}"
 INSTALL_DIR="$INSTALL_ROOT/grokcodeclix"
-BIN_NAME="grok"
+BIN_NAME="grokclix"
 BRANCH="${GROK_CODE_BRANCH:-main}"
 
 c_red()   { printf '\033[31m%s\033[0m' "$*"; }

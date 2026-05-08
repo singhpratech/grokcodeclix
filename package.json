@@ -4,7 +4,7 @@
   "description": "CLI coding assistant powered by Grok AI - like Claude Code but for xAI's Grok models",
   "main": "dist/index.js",
   "bin": {
-    "grok": "dist/cli.js"
+    "grokclix": "dist/cli.js"
   },
   "type": "module",
   "scripts": {

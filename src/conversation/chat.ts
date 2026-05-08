@@ -1368,7 +1368,7 @@ export class GrokChat {
     if (apiKey) {
       checks.push({ name: 'API Key', status: 'ok', message: 'configured' });
     } else {
-      checks.push({ name: 'API Key', status: 'fail', message: 'missing — run `grok auth`' });
+      checks.push({ name: 'API Key', status: 'fail', message: 'missing — run `grokclix auth`' });
     }
 
     const nodeVersion = process.version;
@@ -1865,9 +1865,9 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
     console.log(chalk.bold('  Recommended shell aliases'));
     console.log(chalk.dim('  Add to ~/.bashrc or ~/.zshrc:'));
     console.log();
-    console.log('    ' + chalk.cyan('alias g="grok"'));
-    console.log('    ' + chalk.cyan('alias gr="grok --resume"'));
-    console.log('    ' + chalk.cyan('alias gp="grok --print"   # one-shot non-interactive'));
+    console.log('    ' + chalk.cyan('alias g="grokclix"'));
+    console.log('    ' + chalk.cyan('alias gr="grokclix --resume"'));
+    console.log('    ' + chalk.cyan('alias gp="grokclix --print"   # one-shot non-interactive'));
     console.log();
     console.log(chalk.bold('  Environment variables'));
     console.log();
@@ -1908,7 +1908,7 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
     console.log('    ' + chalk.cyan('npm install'));
     console.log('    ' + chalk.cyan('npm run build'));
     console.log();
-    console.log(chalk.dim('  The symlink at ~/.local/bin/grok will pick up the new build.'));
+    console.log(chalk.dim('  The symlink at ~/.local/bin/grokclix will pick up the new build.'));
     console.log();
     console.log(chalk.bold('  If installed via npm:'));
     console.log();
