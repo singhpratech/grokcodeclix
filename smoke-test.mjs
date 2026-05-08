@@ -220,8 +220,10 @@ await section('Tool execution', async () => {
   // All tools registered
   const toolNames = allTools.map((t) => t.function.name).sort();
   const expected = [
-    'Bash', 'BashOutput', 'Edit', 'ExitPlanMode', 'Glob', 'Grep', 'KillBash',
-    'MultiEdit', 'Read', 'TodoWrite', 'WebFetch', 'WebSearch', 'Write',
+    'Bash', 'BashOutput', 'Edit', 'ExitPlanMode',
+    'GenerateImage', 'Glob', 'Grep', 'KillBash',
+    'MultiEdit', 'Read', 'SpeakText', 'TodoWrite',
+    'TranscribeAudio', 'WebFetch', 'WebSearch', 'Write',
   ];
   assertEq(allTools.length, expected.length, `${expected.length} tools in registry`);
   assertEq(toolNames, expected, 'all tool names present');
@@ -796,6 +798,68 @@ await section('New tool registration', async () => {
     'run_in_background' in (bash?.function?.parameters?.properties || {}),
     'Bash advertises run_in_background param'
   );
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 15. Image generation, transcription, TTS — schemas + offline behaviour
+// ───────────────────────────────────────────────────────────────────────────
+await section('Multimodal tools (image / audio)', async () => {
+  const { allTools, executeTool } = await import(`${DIST}/tools/registry.js`);
+  const names = allTools.map((t) => t.function.name);
+
+  // Tool registration + schema
+  for (const t of ['GenerateImage', 'TranscribeAudio', 'SpeakText']) {
+    assert(names.includes(t), `${t} registered`);
+    const def = allTools.find((x) => x.function.name === t);
+    assert(def?.function?.description?.length > 20, `${t} description present`);
+  }
+  const ig = allTools.find((t) => t.function.name === 'GenerateImage');
+  assert(ig.function.parameters.required.includes('prompt'), 'GenerateImage requires prompt');
+  const ta = allTools.find((t) => t.function.name === 'TranscribeAudio');
+  assert(ta.function.parameters.required.includes('audio_path'), 'TranscribeAudio requires audio_path');
+  const st = allTools.find((t) => t.function.name === 'SpeakText');
+  assert(st.function.parameters.required.includes('text'), 'SpeakText requires text');
+
+  // Without API key, tools error early with a clear message
+  delete process.env.GROK_RUNTIME_API_KEY;
+  const noKeyImg = await executeTool('GenerateImage', { prompt: 'a cat' });
+  assert(!noKeyImg.success, 'GenerateImage fails without API key');
+  assert(/API key/i.test(noKeyImg.error || ''), 'GenerateImage error mentions API key');
+
+  const noKeyTr = await executeTool('TranscribeAudio', { audio_path: '/nonexistent.mp3' });
+  assert(!noKeyTr.success, 'TranscribeAudio fails without API key');
+
+  const noKeySp = await executeTool('SpeakText', { text: 'hello' });
+  assert(!noKeySp.success, 'SpeakText fails without API key');
+
+  // With key but missing/invalid audio file we should still get a clean error
+  process.env.GROK_RUNTIME_API_KEY = 'fake-key-just-for-routing';
+  process.env.GROK_RUNTIME_PROVIDER = 'xai';
+
+  const trMissing = await executeTool('TranscribeAudio', { audio_path: '/tmp/nonexistent-audio.mp3' });
+  assert(!trMissing.success, 'TranscribeAudio fails on missing file');
+  assert(/not found/i.test(trMissing.error || ''), 'TranscribeAudio file-not-found error is clear');
+
+  // Empty prompts/text rejected
+  const emptyImg = await executeTool('GenerateImage', { prompt: '   ' });
+  assert(!emptyImg.success, 'GenerateImage rejects empty prompt');
+  const emptySpeak = await executeTool('SpeakText', { text: '' });
+  assert(!emptySpeak.success, 'SpeakText rejects empty text');
+
+  // Reset env
+  delete process.env.GROK_RUNTIME_API_KEY;
+  delete process.env.GROK_RUNTIME_PROVIDER;
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 16. Slash command coverage for new multimodal commands
+// ───────────────────────────────────────────────────────────────────────────
+await section('Multimodal slash commands', async () => {
+  const { GrokChat } = await import(`${DIST}/conversation/chat.js?v=${Date.now()}`);
+  const cmds = GrokChat.SLASH_COMMANDS;
+  for (const c of ['/imagine', '/voice', '/speak', '/image', '/paste']) {
+    assert(c in cmds, `${c} command registered`);
+  }
 });
 
 // ───────────────────────────────────────────────────────────────────────────

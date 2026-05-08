@@ -11,6 +11,9 @@ import { webFetchTool, WebFetchToolParams } from './webfetch.js';
 import { webSearchTool, WebSearchToolParams } from './websearch.js';
 import { todoWriteTool, TodoWriteParams } from './todowrite.js';
 import { exitPlanModeTool, ExitPlanModeParams } from './exitplan.js';
+import { generateImageTool, GenerateImageParams } from './imagegen.js';
+import { transcribeAudioTool, TranscribeAudioParams } from './transcribe.js';
+import { speakTextTool, SpeakTextParams } from './speak.js';
 
 export type ToolParams =
   | { name: 'Read'; params: ReadToolParams }
@@ -25,7 +28,10 @@ export type ToolParams =
   | { name: 'WebFetch'; params: WebFetchToolParams }
   | { name: 'WebSearch'; params: WebSearchToolParams }
   | { name: 'TodoWrite'; params: TodoWriteParams }
-  | { name: 'ExitPlanMode'; params: ExitPlanModeParams };
+  | { name: 'ExitPlanMode'; params: ExitPlanModeParams }
+  | { name: 'GenerateImage'; params: GenerateImageParams }
+  | { name: 'TranscribeAudio'; params: TranscribeAudioParams }
+  | { name: 'SpeakText'; params: SpeakTextParams };
 
 export interface ToolResult {
   success: boolean;
@@ -264,6 +270,60 @@ export const allTools: Tool[] = [
   {
     type: 'function',
     function: {
+      name: 'GenerateImage',
+      description:
+        'Generate an image from a text prompt using xAI grok-2-image (or the same model via OpenRouter). Saves PNG(s) into ./grok-images/ and returns the saved paths so the user can open them. Use only when the user explicitly asks to create / draw / generate an image.',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'Detailed description of the image to generate' },
+          n: { type: 'number', description: 'Number of images to generate, 1–4 (default 1)' },
+          model: { type: 'string', description: 'Override the image model (default grok-2-image-latest / x-ai/grok-2-image)' },
+          output_dir: { type: 'string', description: 'Directory to save images in (default ./grok-images)' },
+        },
+        required: ['prompt'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'SpeakText',
+      description:
+        'Synthesize speech from text. Tries xAI native TTS first, falls back to OpenRouter / OpenAI TTS. Saves the audio file under ./grok-audio/. Use only when the user asks to read something aloud or generate speech.',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'Text to speak (required)' },
+          voice: { type: 'string', description: 'Voice id (xAI: aurora; OpenAI: alloy/echo/fable/onyx/nova/shimmer)' },
+          output_path: { type: 'string', description: 'Where to save the audio (default ./grok-audio/grok-<ts>.<format>)' },
+          model: { type: 'string', description: 'Override the TTS model id' },
+          format: { type: 'string', enum: ['mp3', 'wav', 'opus', 'aac', 'flac', 'pcm'], description: 'Output format (default mp3)' },
+        },
+        required: ['text'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'TranscribeAudio',
+      description:
+        'Transcribe a local audio file (mp3, m4a, wav, webm, flac, ogg) to text. Routed through OpenRouter to Whisper — only works when the active provider is OpenRouter. xAI direct does not yet expose audio.',
+      parameters: {
+        type: 'object',
+        properties: {
+          audio_path: { type: 'string', description: 'Path to the audio file' },
+          model: { type: 'string', description: 'Whisper model id (default openai/whisper-1)' },
+          language: { type: 'string', description: 'BCP-47 language hint, e.g. "en" or "hi" (optional)' },
+        },
+        required: ['audio_path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'TodoWrite',
       description:
         'Maintain a structured todo list for the current session. Replace the entire list on each call. Use for non-trivial multi-step tasks: create the plan upfront, mark exactly one item in_progress while you work on it, and mark it completed before moving to the next. Skip for trivial single-step requests.',
@@ -318,6 +378,12 @@ export async function executeTool(name: string, params: Record<string, unknown>)
       return todoWriteTool(params as unknown as TodoWriteParams);
     case 'ExitPlanMode':
       return exitPlanModeTool(params as unknown as ExitPlanModeParams);
+    case 'GenerateImage':
+      return generateImageTool(params as unknown as GenerateImageParams);
+    case 'TranscribeAudio':
+      return transcribeAudioTool(params as unknown as TranscribeAudioParams);
+    case 'SpeakText':
+      return speakTextTool(params as unknown as SpeakTextParams);
     default:
       return { success: false, output: '', error: `Unknown tool: ${name}` };
   }

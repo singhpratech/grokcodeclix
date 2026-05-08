@@ -89,6 +89,9 @@ Before editing a file, read it. Mimic naming, formatting, and patterns from the 
 - **WebFetch**: Fetch a URL — HTML is converted to readable text.
 - **WebSearch**: Search the web (Grok Live Search).
 - **TodoWrite**: Maintain a structured plan for non-trivial tasks. Call early and update as you progress.
+- **GenerateImage**: Generate an image from a prompt (saves PNG to ./grok-images/). Use ONLY when the user explicitly asks for an image / illustration / generated picture.
+- **TranscribeAudio**: Transcribe a local audio file. Tries xAI native first, falls back to OpenRouter Whisper.
+- **SpeakText**: Synthesize speech from text (saves audio to ./grok-audio/). Use only when the user asks to read something aloud / generate speech.
 
 # Security
 Never introduce vulnerabilities (XSS, SQL injection, command injection, insecure deserialization). Never log or commit secrets. Treat user-provided file paths and commands as untrusted input — the permission layer will prompt the user for risky operations, but you should still pick the safest tool for the job.
@@ -208,6 +211,9 @@ export class GrokChat {
     // Attachments & custom
     '/image': 'Attach an image from a file path',
     '/paste': 'Paste image from clipboard',
+    '/imagine': 'Generate an image from a prompt (grok-2-image)',
+    '/voice': 'Transcribe an audio file (xAI / OpenRouter Whisper)',
+    '/speak': 'Synthesize speech from text (xAI TTS / OpenAI TTS)',
     '/commands': 'List custom commands',
 
     // Tasks & utilities
@@ -226,6 +232,12 @@ export class GrokChat {
     const initialModel = options.model || 'grok-4-1-fast-reasoning';
     this.parseModelMode(initialModel);
     this.client = new GrokClient(options.apiKey, this.getCurrentModel());
+
+    // Publish key + provider to env so tools that need their own HTTP calls
+    // (GenerateImage, TranscribeAudio) can pick them up without a circular
+    // dependency on this class.
+    process.env.GROK_RUNTIME_API_KEY = options.apiKey;
+    process.env.GROK_RUNTIME_PROVIDER = this.client.provider;
 
     // Autocomplete: shows matching slash commands (built-in + custom)
     const completer = (line: string): [string[], string] => {
@@ -817,6 +829,8 @@ export class GrokChat {
           if (newKey) {
             this.apiKey = newKey;
             this.client = new GrokClient(newKey, this.client.model);
+            process.env.GROK_RUNTIME_API_KEY = newKey;
+            process.env.GROK_RUNTIME_PROVIDER = this.client.provider;
             console.log(chalk.dim('  ✓ Logged in.'));
           }
         }
@@ -842,6 +856,20 @@ export class GrokChat {
         } else {
           await this.attachImageFromClipboard();
         }
+        break;
+
+      case 'imagine':
+        await this.handleImagine(args);
+        break;
+
+      case 'voice':
+      case 'transcribe':
+        await this.handleVoice(args);
+        break;
+
+      case 'speak':
+      case 'tts':
+        await this.handleSpeak(args);
         break;
 
       // Custom commands listing
@@ -2411,6 +2439,87 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
     }
     this.pending.images.push(img);
     console.log(chalk.dim(`  📎 Pasted image from clipboard (${formatSize(img.size)})`));
+  }
+
+  /**
+   * /imagine <prompt> — generate an image directly. Calls the GenerateImage
+   * tool through the registry so all the saving / display logic stays in
+   * one place. Skips the LLM round-trip.
+   */
+  private async handleImagine(prompt?: string): Promise<void> {
+    if (!prompt || !prompt.trim()) {
+      console.log(chalk.yellow('  Usage: /imagine <prompt>'));
+      console.log(chalk.dim('  Generates an image and saves it under ./grok-images/'));
+      return;
+    }
+    const spinner = startSpinner('Generating image…');
+    let result;
+    try {
+      result = await executeTool('GenerateImage', { prompt: prompt.trim() });
+    } finally {
+      spinner.stop();
+    }
+    if (!result.success) {
+      console.log(chalk.red(`  ✗ ${result.error || 'Image generation failed'}`));
+      return;
+    }
+    console.log(SAFFRON('● ') + chalk.bold('Image generated'));
+    console.log('  ' + chalk.dim('⎿  ') + (result.display?.summary || result.output));
+    console.log();
+  }
+
+  /**
+   * /voice <path> — transcribe an audio file. Tries xAI native first,
+   * falls back to OpenRouter Whisper.
+   */
+  private async handleVoice(audioPath?: string): Promise<void> {
+    if (!audioPath || !audioPath.trim()) {
+      console.log(chalk.yellow('  Usage: /voice <path-to-audio>'));
+      console.log(chalk.dim('  Transcribes an audio file (mp3, m4a, wav, webm, flac, ogg).'));
+      console.log(chalk.dim('  Tries xAI native, falls back to OpenRouter Whisper.'));
+      return;
+    }
+    const spinner = startSpinner('Transcribing…');
+    let result;
+    try {
+      result = await executeTool('TranscribeAudio', { audio_path: audioPath.trim() });
+    } finally {
+      spinner.stop();
+    }
+    if (!result.success) {
+      console.log(chalk.red(`  ✗ ${result.error || 'Transcription failed'}`));
+      return;
+    }
+    console.log(SAFFRON('● ') + chalk.bold('Transcript'));
+    console.log();
+    console.log(renderMarkdown(result.output));
+    console.log();
+  }
+
+  /**
+   * /speak <text> — synthesize speech from text. Saves the file under
+   * ./grok-audio/ and prints the path.
+   */
+  private async handleSpeak(text?: string): Promise<void> {
+    if (!text || !text.trim()) {
+      console.log(chalk.yellow('  Usage: /speak <text>'));
+      console.log(chalk.dim('  Generates an mp3 from text and saves it under ./grok-audio/.'));
+      return;
+    }
+    const spinner = startSpinner('Synthesizing speech…');
+    let result;
+    try {
+      result = await executeTool('SpeakText', { text: text.trim() });
+    } finally {
+      spinner.stop();
+    }
+    if (!result.success) {
+      console.log(chalk.red(`  ✗ ${result.error || 'Speech generation failed'}`));
+      return;
+    }
+    console.log(SAFFRON('● ') + chalk.bold('Speech generated'));
+    console.log('  ' + chalk.dim('⎿  ') + (result.display?.summary || result.output));
+    console.log();
   }
 
   // === Core processing ===

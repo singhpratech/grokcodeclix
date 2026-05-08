@@ -33,6 +33,9 @@ const TOOL_RISK_LEVELS: Record<string, ToolRiskLevel> = {
   MultiEdit: 'write',
   Bash: 'execute',
   KillBash: 'execute',
+  GenerateImage: 'write',
+  TranscribeAudio: 'read',
+  SpeakText: 'write',
 };
 
 const RISK_COLORS = {
@@ -160,6 +163,12 @@ export class PermissionManager {
         return truncate(String(params.bash_id || ''), 70);
       case 'TodoWrite':
         return `${(params.todos as unknown[] | undefined)?.length ?? 0} item(s)`;
+      case 'GenerateImage':
+        return truncate(String(params.prompt || ''), 70);
+      case 'TranscribeAudio':
+        return truncate(String(params.audio_path || ''), 70);
+      case 'SpeakText':
+        return truncate(String(params.text || ''), 70);
       case 'Glob':
         return truncate(String(params.pattern || ''), 70);
       case 'Grep':
