@@ -115,32 +115,31 @@ export class ConfigManager {
 
     console.log(chalk.bold('  Welcome to Grok Code!'));
     console.log();
-    console.log(chalk.gray('  To use Grok Code, you need an API key from xAI.'));
+    console.log(chalk.gray('  Choose how you want to authenticate. All three work with Grok models'));
+    console.log(chalk.gray('  including SuperGrok / Grok Premium subscription credits.'));
     console.log();
-    console.log(chalk.cyan('  How would you like to authenticate?'));
-    console.log();
-    console.log('    ' + chalk.bold.cyan('[1]') + ' Open browser to get API key ' + chalk.gray('(recommended)'));
-    console.log('    ' + chalk.bold.cyan('[2]') + ' Paste API key directly ' + chalk.gray('(if you already have one)'));
+    console.log('    ' + chalk.bold.cyan('[1]') + ' Sign in to xAI Console ' + chalk.gray('(opens browser → console.x.ai, supports SuperGrok)'));
+    console.log('    ' + chalk.bold.cyan('[2]') + ' Use OpenRouter ' + chalk.gray('(opens browser → openrouter.ai, one key for many providers)'));
+    console.log('    ' + chalk.bold.cyan('[3]') + ' Paste an existing API key ' + chalk.gray('(xai-… or sk-or-…)'));
     console.log();
 
-    const choice = await question(chalk.bold.green('❯ ') + 'Choose [1/2]: ');
+    const choice = await question(chalk.bold.green('❯ ') + 'Choose [1/2/3]: ');
+    const trimmedChoice = choice.trim();
 
     const xaiUrl = 'https://console.x.ai/';
+    const orUrl = 'https://openrouter.ai/keys';
 
-    if (choice.trim() === '1' || choice.trim() === '') {
+    if (trimmedChoice === '1' || trimmedChoice === '') {
       console.log();
-      console.log(chalk.cyan('  ⏳ Opening browser...'));
-
+      console.log(chalk.cyan('  ⏳ Opening xAI Console...'));
       try {
         await openBrowser(xaiUrl);
         console.log(chalk.white('  ✓ Browser opened!'));
         console.log();
         console.log(chalk.gray('  ─────────────────────────────────────────────────────────────────'));
-        console.log(chalk.gray('  Follow these steps in the browser:'));
-        console.log(chalk.gray('  1. Sign in to your xAI account'));
-        console.log(chalk.gray('  2. Click on "API Keys" in the sidebar'));
-        console.log(chalk.gray('  3. Click "Create API Key"'));
-        console.log(chalk.gray('  4. Copy the key (starts with "xai-")'));
+        console.log(chalk.gray('  1. Sign in to your xAI account (your SuperGrok plan applies here)'));
+        console.log(chalk.gray('  2. Click "API Keys" in the sidebar'));
+        console.log(chalk.gray('  3. Click "Create API Key", copy the key (starts with "xai-")'));
         console.log(chalk.gray('  ─────────────────────────────────────────────────────────────────'));
         console.log();
       } catch {
@@ -148,9 +147,29 @@ export class ConfigManager {
         console.log(chalk.gray(`  Please visit: ${chalk.cyan(xaiUrl)}`));
         console.log();
       }
+    } else if (trimmedChoice === '2') {
+      console.log();
+      console.log(chalk.cyan('  ⏳ Opening OpenRouter...'));
+      try {
+        await openBrowser(orUrl);
+        console.log(chalk.white('  ✓ Browser opened!'));
+        console.log();
+        console.log(chalk.gray('  ─────────────────────────────────────────────────────────────────'));
+        console.log(chalk.gray('  1. Sign in / sign up at openrouter.ai'));
+        console.log(chalk.gray('  2. Visit Keys → Create Key'));
+        console.log(chalk.gray('  3. Copy the key (starts with "sk-or-")'));
+        console.log(chalk.gray('  4. (Optional) Adjust privacy/data-policy at openrouter.ai/settings/privacy'));
+        console.log(chalk.gray('  ─────────────────────────────────────────────────────────────────'));
+        console.log();
+      } catch {
+        console.log(chalk.yellow('  ⚠ Could not open browser automatically.'));
+        console.log(chalk.gray(`  Please visit: ${chalk.cyan(orUrl)}`));
+        console.log();
+      }
     } else {
       console.log();
-      console.log(chalk.gray(`  Get your API key from: ${chalk.cyan(xaiUrl)}`));
+      console.log(chalk.gray(`  xAI:        ${chalk.cyan(xaiUrl)}`));
+      console.log(chalk.gray(`  OpenRouter: ${chalk.cyan(orUrl)}`));
       console.log();
     }
 
@@ -177,28 +196,41 @@ export class ConfigManager {
       frameIndex = (frameIndex + 1) % frames.length;
     }, 80);
 
+    const trimmedKey = apiKey.trim();
+    const isOpenRouter = trimmedKey.startsWith('sk-or-');
+    const validateUrl = isOpenRouter
+      ? 'https://openrouter.ai/api/v1/models'
+      : 'https://api.x.ai/v1/models';
+    const validateHeaders: Record<string, string> = { 'Authorization': `Bearer ${trimmedKey}` };
+    if (isOpenRouter) {
+      validateHeaders['HTTP-Referer'] = 'https://github.com/singhpratech/grokcodeclix';
+      validateHeaders['X-Title'] = 'Grok Code CLI';
+    }
+
     try {
-      const response = await fetch('https://api.x.ai/v1/models', {
-        headers: {
-          'Authorization': `Bearer ${apiKey.trim()}`,
-        },
-      });
+      const response = await fetch(validateUrl, { headers: validateHeaders });
 
       clearInterval(spinner);
 
       if (!response.ok) {
         console.log(`\r${chalk.red('  ✗ Invalid API key. Please check and try again.')}          `);
         console.log();
-        console.log(chalk.gray('  Make sure you copied the complete key starting with "xai-"'));
+        console.log(chalk.gray(`  Make sure you copied the complete key starting with "${isOpenRouter ? 'sk-or-' : 'xai-'}"`));
         rl.close();
         return false;
       }
 
       // Get available models to show
       const data = await response.json() as { data: { id: string }[] };
-      const modelCount = data.data?.length || 0;
+      const all = data.data || [];
+      const modelCount = isOpenRouter
+        ? all.filter((m) => m.id.startsWith('x-ai/')).length
+        : all.length;
 
-      await this.setApiKey(apiKey.trim());
+      await this.setApiKey(trimmedKey);
+      const provider = isOpenRouter ? 'openrouter' : 'xai';
+      console.log(); // spacing for next message
+      console.log(chalk.dim(`  Provider: ${provider}`));
 
       // Success animation
       console.log(`\r${chalk.white('  ✓ API key validated!')}                                 `);

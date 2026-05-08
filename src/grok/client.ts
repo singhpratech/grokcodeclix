@@ -158,15 +158,86 @@ export interface ChatOptions {
   user?: string;
 }
 
+export type GrokProvider = 'xai' | 'openrouter';
+
+export interface GrokClientOptions {
+  baseUrl?: string;
+  provider?: GrokProvider;
+}
+
+/**
+ * Detect which provider an API key belongs to from its prefix.
+ *   xai-*     → xAI direct
+ *   sk-or-*   → OpenRouter
+ *   anything else defaults to xAI.
+ */
+export function detectProvider(apiKey: string): GrokProvider {
+  if (apiKey.startsWith('sk-or-')) return 'openrouter';
+  return 'xai';
+}
+
+export function providerBaseUrl(provider: GrokProvider): string {
+  switch (provider) {
+    case 'openrouter':
+      return 'https://openrouter.ai/api/v1';
+    case 'xai':
+    default:
+      return 'https://api.x.ai/v1';
+  }
+}
+
+/**
+ * Translate a model name to the form the active provider expects.
+ *  xAI accepts: grok-4-1-fast-reasoning, grok-4, grok-3, ...
+ *  OpenRouter expects: x-ai/grok-4, x-ai/grok-4-fast, x-ai/grok-code-fast-1, ...
+ */
+export function normaliseModelForProvider(model: string, provider: GrokProvider): string {
+  if (provider === 'openrouter') {
+    if (model.startsWith('x-ai/') || model.includes('/')) return model;
+    // Map xAI canonical names to OpenRouter slugs
+    const map: Record<string, string> = {
+      'grok-4-1-fast-reasoning': 'x-ai/grok-4.1-fast',
+      'grok-4-1-fast-non-reasoning': 'x-ai/grok-4.1-fast',
+      'grok-4-fast-reasoning': 'x-ai/grok-4-fast',
+      'grok-4-fast-non-reasoning': 'x-ai/grok-4-fast',
+      'grok-4': 'x-ai/grok-4',
+      'grok-code-fast-1': 'x-ai/grok-code-fast-1',
+      'grok-3': 'x-ai/grok-3',
+      'grok-3-mini': 'x-ai/grok-3-mini',
+    };
+    return map[model] || `x-ai/${model}`;
+  }
+  // xAI direct: strip a leading x-ai/ if someone passed an OR slug
+  if (model.startsWith('x-ai/')) return model.replace(/^x-ai\//, '');
+  return model;
+}
+
 export class GrokClient {
   private apiKey: string;
-  private baseUrl: string = 'https://api.x.ai/v1';
+  private baseUrl: string;
   public model: string;
+  public provider: GrokProvider;
 
-  constructor(apiKey: string, model: string = 'grok-4-1-fast-reasoning', baseUrl?: string) {
+  constructor(apiKey: string, model: string = 'grok-4-1-fast-reasoning', options: GrokClientOptions | string = {}) {
     this.apiKey = apiKey;
-    this.model = model;
-    if (baseUrl) this.baseUrl = baseUrl;
+    // Backwards compatibility: third arg used to be baseUrl: string
+    const opts: GrokClientOptions = typeof options === 'string' ? { baseUrl: options } : options;
+    this.provider = opts.provider || detectProvider(apiKey);
+    this.baseUrl = opts.baseUrl || providerBaseUrl(this.provider);
+    this.model = normaliseModelForProvider(model, this.provider);
+  }
+
+  private headers(extra?: Record<string, string>): Record<string, string> {
+    const h: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.apiKey}`,
+    };
+    if (this.provider === 'openrouter') {
+      h['HTTP-Referer'] = 'https://github.com/singhpratech/grokcodeclix';
+      h['X-Title'] = 'Grok Code CLI';
+    }
+    if (extra) Object.assign(h, extra);
+    return h;
   }
 
   private buildRequest(
@@ -216,13 +287,21 @@ export class GrokClient {
     let hint = '';
     switch (status) {
       case 401:
-        hint = ' — check your XAI_API_KEY (run `grok auth`)';
+        hint = ' — check your API key (run `grok auth`)';
         break;
       case 403:
         hint = ' — your account may not have access to this model';
         break;
       case 404:
-        hint = ' — unknown model, try `/model` to pick another';
+        // OpenRouter uses 404 for both "no such model" and "blocked by your
+        // privacy/data-policy settings." Detect the latter and steer the user.
+        if (this.provider === 'openrouter' && /guardrail|data policy/i.test(detail)) {
+          hint =
+            ' — OpenRouter blocked this model under your privacy / data-policy settings.\n' +
+            '  Visit https://openrouter.ai/settings/privacy and enable "Free model training" or pick a paid endpoint';
+        } else {
+          hint = ' — unknown model, try `/model` to pick another';
+        }
         break;
       case 429: {
         const retry = response.headers.get('retry-after');
@@ -233,7 +312,9 @@ export class GrokClient {
       case 502:
       case 503:
       case 504:
-        hint = ' — xAI is having a rough moment, try again shortly';
+        hint = this.provider === 'openrouter'
+          ? ' — OpenRouter / upstream is having a rough moment, try again shortly'
+          : ' — xAI is having a rough moment, try again shortly';
         break;
     }
 
@@ -249,10 +330,7 @@ export class GrokClient {
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
+      headers: this.headers(),
       body: JSON.stringify(request),
       signal: options.signal,
     });
@@ -270,10 +348,7 @@ export class GrokClient {
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
+      headers: this.headers(),
       body: JSON.stringify(request),
       signal: options.signal,
     });
@@ -318,20 +393,32 @@ export class GrokClient {
   }
 
   async listModels(): Promise<string[]> {
-    const response = await fetch(`${this.baseUrl}/models`, {
-      headers: { 'Authorization': `Bearer ${this.apiKey}` },
-    });
+    const response = await fetch(`${this.baseUrl}/models`, { headers: this.headers() });
 
     if (!response.ok) await this.handleError(response);
 
     const data = await response.json() as { data: { id: string }[] };
-    return data.data.map((m) => m.id);
+    let ids = data.data.map((m) => m.id);
+    if (this.provider === 'openrouter') {
+      ids = ids.filter((id) => id.startsWith('x-ai/'));
+    }
+    return ids;
   }
 
   async modelInfo(modelId: string): Promise<Record<string, unknown> | null> {
+    if (this.provider === 'openrouter') {
+      try {
+        const response = await fetch(`${this.baseUrl}/models`, { headers: this.headers() });
+        if (!response.ok) return null;
+        const all = (await response.json()) as { data: Array<Record<string, unknown>> };
+        return all.data.find((m) => m.id === modelId) || null;
+      } catch {
+        return null;
+      }
+    }
     try {
       const response = await fetch(`${this.baseUrl}/language-models/${modelId}`, {
-        headers: { 'Authorization': `Bearer ${this.apiKey}` },
+        headers: this.headers(),
       });
       if (!response.ok) return null;
       return await response.json() as Record<string, unknown>;

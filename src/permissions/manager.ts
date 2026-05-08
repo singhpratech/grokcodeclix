@@ -26,9 +26,13 @@ const TOOL_RISK_LEVELS: Record<string, ToolRiskLevel> = {
   Grep: 'read',
   WebFetch: 'read',
   WebSearch: 'read',
+  BashOutput: 'read',
+  TodoWrite: 'read',
   Write: 'write',
   Edit: 'write',
+  MultiEdit: 'write',
   Bash: 'execute',
+  KillBash: 'execute',
 };
 
 const RISK_COLORS = {
@@ -147,9 +151,15 @@ export class PermissionManager {
       case 'Read':
       case 'Write':
       case 'Edit':
+      case 'MultiEdit':
         return truncate(String(params.file_path || ''), 70);
       case 'Bash':
         return truncate(String(params.command || ''), 70);
+      case 'BashOutput':
+      case 'KillBash':
+        return truncate(String(params.bash_id || ''), 70);
+      case 'TodoWrite':
+        return `${(params.todos as unknown[] | undefined)?.length ?? 0} item(s)`;
       case 'Glob':
         return truncate(String(params.pattern || ''), 70);
       case 'Grep':
@@ -170,13 +180,18 @@ export class PermissionManager {
       case 'Grep':
       case 'WebFetch':
       case 'WebSearch':
+      case 'BashOutput':
+      case 'TodoWrite':
         return 'Do you want to proceed?';
       case 'Write':
         return 'Do you want to create/overwrite this file?';
       case 'Edit':
+      case 'MultiEdit':
         return 'Do you want to make this edit?';
       case 'Bash':
         return 'Do you want to run this command?';
+      case 'KillBash':
+        return 'Do you want to kill this background process?';
       default:
         return 'Do you want to proceed?';
     }

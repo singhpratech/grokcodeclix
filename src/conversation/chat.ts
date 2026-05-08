@@ -7,6 +7,8 @@ import chalk from 'chalk';
 import { fileURLToPath } from 'url';
 import { GrokClient, GrokMessage, GrokContentPart, ToolCall, ChatOptions as GrokChatOptions } from '../grok/client.js';
 import { allTools, executeTool, ToolResult } from '../tools/registry.js';
+import { planExitState } from '../tools/exitplan.js';
+import { todoState, renderTodoList } from '../tools/todowrite.js';
 import { PermissionManager } from '../permissions/manager.js';
 import { HistoryManager, ConversationSession } from './history.js';
 import { ConfigManager } from '../config/manager.js';
@@ -49,37 +51,44 @@ function buildSystemPrompt(cwd: string, workingDirs: string[], projectContext: s
   return `You are Grok Code, an agentic CLI coding assistant powered by xAI's Grok models. You help users with software engineering tasks directly from the terminal.
 
 # Tone and style
-Be concise, direct, and to the point. Output will be rendered in a terminal, so keep it scannable. Answer in one or two short sentences when you can. Only go long when the user asks for explanation or the task genuinely needs it. Skip preamble ("I'll help you...", "Sure!", "Let me..."). Don't restate what the user said. Don't summarize what you just did unless asked. Don't emit filler.
+Be concise, direct, and to the point. Output will be rendered in a terminal, so keep it scannable. Default to one or two short sentences. Only go long when the user asks for explanation or the task genuinely needs it. Skip preamble ("I'll help you...", "Sure!", "Let me..."). Don't restate what the user said. Don't summarize what you just did unless asked. Don't emit filler.
 
 You MAY use GitHub-flavored Markdown. Code blocks should use fenced syntax with a language tag so the terminal can highlight them.
 
 # Proactiveness
-You are allowed to be proactive when the user asks for something, but don't do extra work beyond what they asked. Don't refactor code you weren't asked to refactor. Don't "improve" code that works. Don't add comments or docstrings to code you didn't change. Don't add speculative error handling. Match the existing code style.
+Do exactly what the user asked. Don't refactor code you weren't asked to refactor. Don't "improve" working code. Don't add comments to code you didn't change. Don't add speculative error handling. Match the existing code style.
 
 # Following conventions
-Before editing a file, read it and understand the existing conventions. Mimic the style (naming, formatting, comments) of the code you're working with. Check imports and neighbouring files before introducing new patterns. If the repo uses a particular library, use that same library — don't introduce a new dependency unless necessary.
+Before editing a file, read it. Mimic naming, formatting, and patterns from the surrounding code. Check imports and neighbouring files before introducing new patterns. If the repo uses a particular library or convention, follow it — don't introduce a new dependency unless necessary.
 
 # Task management
-For non-trivial tasks, break work into clear steps and execute them in order. Read relevant files before making edits. Verify your assumptions. When a task is done, stop — don't volunteer unrelated follow-ups.
+- For non-trivial multi-step work (3+ steps), call **TodoWrite** to plan upfront. Mark exactly one item \`in_progress\` while you work on it; mark it \`completed\` before moving to the next. Skip TodoWrite for trivial single-step requests.
+- Read relevant files before making edits. Verify assumptions before acting.
+- When the task is done, stop. Don't volunteer unrelated follow-ups.
 
 # Tool use rules
+- **Parallelism matters.** When multiple tool calls are independent — reading several files, running independent searches, kicking off two unrelated bash commands — issue them in a SINGLE response so they execute concurrently. Only sequence calls when one truly needs the result of another.
 - **Read before you Edit.** Never edit a file you haven't read in this session.
-- **Edit requires exact matches.** The \`old_string\` parameter must match exactly, including whitespace and indentation. If \`old_string\` is not unique in the file, either include more surrounding context to disambiguate or pass \`replace_all: true\`.
-- **Prefer Grep for searching code**, Glob for finding files. Don't use Bash's find/grep for that — the dedicated tools are faster and more precise.
-- **Prefer Read over Bash \`cat\`**, Write over \`echo >\`, Edit over \`sed\`.
-- **Batch independent tool calls in a single response** when possible to save round-trips.
-- **Bash is for actions the dedicated tools can't do** — git, npm, running tests, etc. Don't use it for file reads or file searches.
-- **WebSearch / WebFetch** are for looking up current information, library docs, error messages. Use when you need information that isn't in the workspace.
+- **MultiEdit for refactors.** If you need to change many spots in the same file, call MultiEdit ONCE with all edits — don't fire many Edit calls. MultiEdit is atomic: all-or-nothing.
+- **Edit requires exact matches.** \`old_string\` must match exactly including whitespace. If it is not unique, include more context or set \`replace_all: true\`.
+- **Prefer dedicated tools.** Read instead of \`cat\`, Write instead of \`echo >\`, Edit instead of \`sed\`, Grep instead of \`grep\`, Glob instead of \`find\`. The dedicated tools are faster and structured.
+- **Long-running commands** (servers, watchers, builds taking minutes) should set \`run_in_background: true\` on Bash. Then poll with **BashOutput** to read incremental output and **KillBash** to stop. Don't block on a long foreground command.
+- **Bash is for actions** dedicated tools cannot do: git, npm, package managers, running tests, build scripts, deploys.
+- **WebSearch / WebFetch** for current info, docs, error message lookups, package versions — anything not in the workspace.
 
 # Available tools
-- **Read**: Read files with line numbers. Supports offset/limit.
-- **Write**: Create a new file or overwrite an existing one.
-- **Edit**: Replace an exact string in a file. Reads before editing is REQUIRED.
-- **Glob**: Find files matching a glob pattern (e.g. \`**/*.ts\`).
-- **Grep**: Regex search across files. Supports include filter.
-- **Bash**: Execute shell commands (git, npm, tests). Has a timeout and captures stdout/stderr.
-- **WebFetch**: Fetch a URL and return its content (HTML is converted to text, JSON is parsed).
-- **WebSearch**: Search the web for current information.
+- **Read**: Read a file with line numbers. Supports offset / limit.
+- **Write**: Create / overwrite a file. Use for new files; prefer Edit/MultiEdit for existing files.
+- **Edit**: Replace one exact string in a file (or all occurrences with replace_all).
+- **MultiEdit**: Apply many string-replacements to one file atomically. Use for in-file refactors.
+- **Glob**: Find files by pattern (e.g. \`**/*.ts\`).
+- **Grep**: Regex search across files.
+- **Bash**: Run a shell command. Set \`run_in_background\` for long-running.
+- **BashOutput**: Read incremental output from a background Bash process by bash_id.
+- **KillBash**: Stop a background Bash process by bash_id.
+- **WebFetch**: Fetch a URL — HTML is converted to readable text.
+- **WebSearch**: Search the web (Grok Live Search).
+- **TodoWrite**: Maintain a structured plan for non-trivial tasks. Call early and update as you progress.
 
 # Security
 Never introduce vulnerabilities (XSS, SQL injection, command injection, insecure deserialization). Never log or commit secrets. Treat user-provided file paths and commands as untrusted input — the permission layer will prompt the user for risky operations, but you should still pick the safest tool for the job.
@@ -1112,17 +1121,32 @@ export class GrokChat {
       (m) => !m.startsWith('grok-4') && !m.startsWith('grok-3') && !m.startsWith('grok-2')
     );
 
+    // Vision capability heuristics. Grok 4 (and later 4.x), all 2-vision
+    // variants, and explicitly named -vision models accept image_url parts.
+    // grok-3 and grok-3-mini are text-only.
+    const supportsVision = (model: string): boolean => {
+      const m = model.toLowerCase();
+      if (m.includes('vision')) return true;
+      if (m.includes('image')) return true; // image-gen / multimodal
+      if (m.startsWith('grok-4') || m.startsWith('x-ai/grok-4')) return true;
+      if (m.startsWith('grok-2-vision')) return true;
+      return false;
+    };
+
     const describe = (model: string): string => {
-      if (model.includes('non-reasoning')) return 'fast';
-      if (model.includes('reasoning')) return 'reasoning';
-      if (model.includes('mini')) return 'small/fast';
-      if (model.includes('image')) return 'image gen';
-      if (model.includes('vision')) return 'vision';
-      return '';
+      const tags: string[] = [];
+      if (model.includes('non-reasoning')) tags.push('fast');
+      else if (model.includes('reasoning')) tags.push('reasoning');
+      else if (model.includes('mini')) tags.push('small/fast');
+      if (model.includes('image')) tags.push('image gen');
+      else if (model.includes('vision')) tags.push('vision');
+      if (supportsVision(model) && !tags.includes('vision')) tags.push('👁 vision');
+      return tags.join(' · ');
     };
 
     for (const m of [...grok41, ...grok4, ...grok3, ...grok2, ...others]) {
-      options.push({ label: m, value: m, description: describe(m) });
+      const labelPrefix = supportsVision(m) ? '👁 ' : '   ';
+      options.push({ label: `${labelPrefix}${m}`, value: m, description: describe(m) });
     }
 
     console.log();
@@ -2441,11 +2465,48 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
     }
   }
 
+  /**
+   * Wrap a fetch-driven API call with retry on transient failures.
+   *
+   * Retries on:
+   *   - 429 Too Many Requests (with retry-after if provided)
+   *   - 502 / 503 / 504 (transient server errors)
+   *   - network errors (ECONNRESET, ETIMEDOUT)
+   * Up to 3 attempts with exponential backoff.
+   */
+  private async withRetry<T>(fn: () => Promise<T>, label: string = 'request'): Promise<T> {
+    const maxAttempts = 3;
+    let attempt = 0;
+    let lastError: Error | null = null;
+    while (attempt < maxAttempts) {
+      attempt += 1;
+      try {
+        return await fn();
+      } catch (error) {
+        const err = error as Error;
+        lastError = err;
+        const msg = err.message || '';
+        const transient =
+          /\b(429|502|503|504)\b/.test(msg) ||
+          /(ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENETUNREACH|UND_ERR_SOCKET)/i.test(msg) ||
+          /rate limit/i.test(msg);
+        if (err.name === 'AbortError') throw err;
+        if (!transient || attempt >= maxAttempts) throw err;
+        // Honour retry-after if shown in message, otherwise exponential
+        const retryMatch = msg.match(/retry after (\d+)s/);
+        const waitMs = retryMatch ? Number(retryMatch[1]) * 1000 : 600 * Math.pow(2, attempt - 1);
+        console.log(chalk.dim(`  ↻ ${label} hit transient error, retrying in ${Math.round(waitMs / 100) / 10}s (${attempt}/${maxAttempts - 1})`));
+        await new Promise((r) => setTimeout(r, waitMs));
+      }
+    }
+    throw lastError || new Error(`${label} failed`);
+  }
+
   private async getResponse(): Promise<void> {
     const spinner = startSpinner('Thinking…');
 
     try {
-      const response = await this.client.chat(this.messages, allTools);
+      const response = await this.withRetry(() => this.client.chat(this.messages, allTools), 'chat');
       spinner.stop();
       const choice = response.choices[0];
       const message = choice.message;
@@ -2465,9 +2526,7 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
           console.log();
         }
 
-        for (const toolCall of message.tool_calls) {
-          await this.executeToolCall(toolCall);
-        }
+        await this.executeToolCalls(message.tool_calls);
 
         await this.getResponse();
       } else {
@@ -2603,14 +2662,17 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
 
       if (toolCalls.length > 0 && !aborted) {
         if (fullContent) console.log();
-        for (const toolCall of toolCalls) {
-          await this.executeToolCall(toolCall);
-        }
-        // Continue the agentic loop
+        // Stop the keypress listener BEFORE running tool calls so that
+        // permission prompts can read keyboard input cleanly.
         if (process.stdin.isTTY) {
-          process.stdin.setRawMode(false);
-          process.stdin.removeListener('data', onKeypress);
+          try {
+            process.stdin.setRawMode(false);
+            process.stdin.removeListener('data', onKeypress);
+          } catch {
+            /* ignore */
+          }
         }
+        await this.executeToolCalls(toolCalls);
         this.abortController = null;
         await this.getStreamingResponse();
         return;
@@ -2641,6 +2703,71 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
     }
   }
 
+  /**
+   * Execute a batch of tool calls from one assistant turn.
+   *
+   * Strategy:
+   *   - In yolo mode (no permission prompts), run them concurrently. This
+   *     gives a real speed boost when the model batches independent reads
+   *     or searches.
+   *   - In interactive mode, run them sequentially so the user sees one
+   *     permission prompt at a time. Sequencing also avoids races where
+   *     two Edits could conflict on the same file.
+   */
+  private async executeToolCalls(toolCalls: ToolCall[]): Promise<void> {
+    const yolo = (this.permissions as unknown as { yolo?: boolean }).yolo === true;
+    if (yolo && toolCalls.length > 1) {
+      await Promise.all(toolCalls.map((tc) => this.executeToolCall(tc)));
+    } else {
+      for (const toolCall of toolCalls) {
+        await this.executeToolCall(toolCall);
+      }
+    }
+
+    // After the batch runs, check whether the model called ExitPlanMode.
+    // If so, prompt the user to approve before exiting plan mode.
+    if (planExitState.requested) {
+      planExitState.requested = false;
+      const plan = planExitState.plan;
+      planExitState.plan = '';
+
+      console.log();
+      console.log(SAFFRON('● ') + chalk.bold('Proposed plan'));
+      console.log();
+      console.log(renderMarkdown(plan));
+      console.log();
+
+      const approved = await this.permissions.requestPermission({
+        tool: 'ExitPlanMode',
+        description: 'Approve the proposed plan and exit plan mode',
+        riskLevel: 'write',
+        details: { plan },
+      });
+
+      if (approved) {
+        this.planMode = false;
+        console.log(chalk.dim('  Plan approved — plan mode off, executing.'));
+        this.messages.push({
+          role: 'user',
+          content: '[system] Plan approved. Plan mode is now OFF — proceed with the plan using all tools.',
+        });
+      } else {
+        console.log(chalk.yellow('  Plan rejected — staying in plan mode.'));
+        this.messages.push({
+          role: 'user',
+          content: '[system] Plan rejected. Stay in plan mode and revise the plan based on the user\'s feedback.',
+        });
+      }
+    }
+
+    // Render the live todo list when the model touched it this turn.
+    if (toolCalls.some((tc) => tc.function.name === 'TodoWrite') && todoState.items.length > 0) {
+      console.log(chalk.dim('  ── todos ──'));
+      console.log(renderTodoList(todoState.items));
+      console.log();
+    }
+  }
+
   private async executeToolCall(toolCall: ToolCall): Promise<void> {
     const { name, arguments: argsJson } = toolCall.function;
 
@@ -2657,9 +2784,12 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
       return;
     }
 
-    // Plan mode: block writes and execute
-    if (this.planMode && (name === 'Write' || name === 'Edit' || name === 'Bash')) {
-      const reason = `Plan mode is on — ${name} is blocked. Toggle with /plan.`;
+    // Plan mode: block side-effecting tools and steer the model toward
+    // ExitPlanMode. Only Read, Glob, Grep, WebFetch, WebSearch, TodoWrite,
+    // BashOutput, and ExitPlanMode are allowed in plan mode.
+    const PLAN_BLOCKED = new Set(['Write', 'Edit', 'MultiEdit', 'Bash', 'KillBash']);
+    if (this.planMode && PLAN_BLOCKED.has(name)) {
+      const reason = `Plan mode is on — ${name} is blocked. Finish planning, then call ExitPlanMode with your plan; the user will approve before any changes are made.`;
       console.log(chalk.yellow(`  ⚠ ${reason}`));
       this.messages.push({
         role: 'tool',
@@ -2729,10 +2859,32 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
     }
     console.log();
 
+    // Truncate huge outputs going back to the model so we don't blow context.
+    // We keep the head and tail and replace the middle with a marker so the
+    // model can see both ends of large logs / files / search dumps.
+    const MODEL_TOOL_OUTPUT_CAP = 80_000; // ~20k tokens
+    let modelContent: string;
+    if (result.success) {
+      const out = result.output || '';
+      if (out.length > MODEL_TOOL_OUTPUT_CAP) {
+        const half = Math.floor((MODEL_TOOL_OUTPUT_CAP - 200) / 2);
+        const head = out.slice(0, half);
+        const tail = out.slice(-half);
+        modelContent =
+          head +
+          `\n\n... [truncated ${out.length - 2 * half} characters of tool output — call the tool with offset/limit or a narrower query if you need the full content] ...\n\n` +
+          tail;
+      } else {
+        modelContent = out;
+      }
+    } else {
+      modelContent = `Error: ${result.error}`;
+    }
+
     this.messages.push({
       role: 'tool',
       tool_call_id: toolCall.id,
-      content: result.success ? result.output : `Error: ${result.error}`,
+      content: modelContent,
     });
   }
 
@@ -2764,8 +2916,17 @@ function formatToolInvocation(name: string, params: Record<string, unknown>): st
     case 'Write':
     case 'Edit':
       return style(truncate(relOrAbs(String(params.file_path || '')), 60));
-    case 'Bash':
-      return style(truncate(String(params.command || ''), 60));
+    case 'MultiEdit': {
+      const n = (params.edits as unknown[] | undefined)?.length ?? 0;
+      return style(truncate(relOrAbs(String(params.file_path || '')), 50)) + chalk.dim(` · ${n} edit${n === 1 ? '' : 's'}`);
+    }
+    case 'Bash': {
+      const bg = params.run_in_background ? chalk.dim(' (background)') : '';
+      return style(truncate(String(params.command || ''), 60)) + bg;
+    }
+    case 'BashOutput':
+    case 'KillBash':
+      return style(truncate(String(params.bash_id || ''), 60));
     case 'Glob':
       return style(truncate(String(params.pattern || ''), 60));
     case 'Grep': {
@@ -2776,6 +2937,11 @@ function formatToolInvocation(name: string, params: Record<string, unknown>): st
       return style(truncate(String(params.url || ''), 60));
     case 'WebSearch':
       return style(truncate(String(params.query || ''), 60));
+    case 'TodoWrite': {
+      const todos = (params.todos as Array<{ status: string }> | undefined) ?? [];
+      const done = todos.filter((t) => t.status === 'completed').length;
+      return style(`${done}/${todos.length} done`);
+    }
     default:
       return style(truncate(JSON.stringify(params), 60));
   }

@@ -90,8 +90,8 @@ Familiar slash commands, permission system, and workflows. If you've used Claude
 </td>
 <td width="50%">
 
-### 8 Powerful Tools
-Read files, write code, execute commands, search codebases, fetch web content, and **search the web** - all with intelligent permission management.
+### 13 Powerful Tools
+Read, Write, Edit, **MultiEdit** (atomic batch edits), Glob, Grep, Bash with **run_in_background** + BashOutput + KillBash, WebFetch, WebSearch, **TodoWrite**, **ExitPlanMode** — full Claude Code parity.
 
 ### Session Persistence
 Resume conversations where you left off. Your context, history, and progress are automatically saved.
@@ -362,39 +362,44 @@ Done.
 
 - **Node.js ≥ 18** (check with `node --version`)
 - **git** (for cloning)
-- An xAI API key (any paid Grok plan — SuperGrok, Grok Heavy, or pay-as-you-go — or you can create one at [console.x.ai](https://console.x.ai/))
+- One of:
+  - An **xAI API key** (any paid Grok plan — SuperGrok, Grok Heavy, or pay-as-you-go — from [console.x.ai](https://console.x.ai/))
+  - An **OpenRouter API key** (one key for many providers — from [openrouter.ai/keys](https://openrouter.ai/keys))
 
 ### Installation
 
-#### Option 1: No-sudo install from GitHub (recommended)
+#### One-liner (recommended)
 
 ```bash
-# Clone and build
+curl -fsSL https://raw.githubusercontent.com/singhpratech/grokcodeclix/main/install.sh | bash
+```
+
+The installer clones into `~/.grok-code/grokcodeclix`, builds, and symlinks `grok` into `~/.local/bin`. Add `~/.local/bin` to your PATH if it isn't already.
+
+#### Manual install from GitHub
+
+```bash
 git clone https://github.com/singhpratech/grokcodeclix.git ~/src/grokcodeclix
 cd ~/src/grokcodeclix
 npm install
 npm run build
 
-# Symlink into your PATH (no sudo needed)
 mkdir -p ~/.local/bin
 ln -sf "$PWD/dist/cli.js" ~/.local/bin/grok
 chmod +x dist/cli.js
 
-# Ensure ~/.local/bin is in PATH (add to ~/.bashrc or ~/.zshrc if missing)
-export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"   # add to ~/.bashrc or ~/.zshrc
 ```
 
 Then `grok` works anywhere.
 
-#### Option 2: npm global install (needs sudo if prefix is `/usr`)
+#### npm global install
 
 ```bash
+# With sudo (system prefix)
 sudo npm install -g github:singhpratech/grokcodeclix
-```
 
-#### Option 3: npm global without sudo (user prefix)
-
-```bash
+# Or without sudo (user prefix)
 mkdir -p ~/.npm-global
 npm config set prefix "$HOME/.npm-global"
 echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.bashrc
@@ -405,11 +410,11 @@ npm install -g github:singhpratech/grokcodeclix
 #### Updating
 
 ```bash
-cd ~/src/grokcodeclix
-git pull
-npm install
-npm run build
-# The symlink already points at dist/cli.js — no further action needed.
+# If you used the one-liner:
+curl -fsSL https://raw.githubusercontent.com/singhpratech/grokcodeclix/main/install.sh | bash
+
+# If you used the manual install:
+cd ~/src/grokcodeclix && git pull && npm install && npm run build
 ```
 
 ### Setup
@@ -422,10 +427,13 @@ Just run the auth command - it will guide you through everything:
 grok auth
 ```
 
-This will:
-1. Open your browser to xAI Console
-2. Guide you through creating an API key
-3. Validate and save your key securely
+You'll be offered three paths:
+
+| Choice | Where it sends you | When to use |
+|--------|-------------------|-------------|
+| **[1] xAI Console** | console.x.ai | You have a SuperGrok / Grok Premium subscription, or you want a direct xAI key. |
+| **[2] OpenRouter** | openrouter.ai/keys | You want one key for many providers, or you don't have an xAI account. |
+| **[3] Paste existing key** | — | You already have a key. The CLI auto-detects the provider from the prefix (`xai-…` → xAI, `sk-or-…` → OpenRouter). |
 
 ```
 ╭──────────────────────────────────────────────────────────────────────╮
@@ -434,15 +442,14 @@ This will:
 
   Welcome to Grok Code!
 
-  To use Grok Code, you need an API key from xAI.
-  We'll open your browser to the xAI console where you can:
+  Choose how you want to authenticate. All three work with Grok models
+  including SuperGrok / Grok Premium subscription credits.
 
-    1. Sign in or create an account
-    2. Go to API Keys section
-    3. Create a new API key
-    4. Copy the key and paste it here
+    [1] Sign in to xAI Console (opens browser → console.x.ai, supports SuperGrok)
+    [2] Use OpenRouter (opens browser → openrouter.ai, one key for many providers)
+    [3] Paste an existing API key (xai-… or sk-or-…)
 
-❯ Open xAI Console in browser? [Y/n]: Y
+❯ Choose [1/2/3]: 1
 
   ⏳ Opening browser...
   ✓ Browser opened!
@@ -472,7 +479,9 @@ This will:
 
 ```bash
 # Add to your shell profile (~/.bashrc, ~/.zshrc, etc.)
-export XAI_API_KEY=your_api_key_here
+export XAI_API_KEY=xai-••••••••••••••••           # for xAI direct
+# or
+export XAI_API_KEY=sk-or-v1-•••••••••••••         # for OpenRouter (auto-detected)
 ```
 
 #### Start Coding
@@ -493,7 +502,7 @@ That's it! You're ready to go.
 |---------|-------------|
 | **Interactive AI Chat** | Real-time conversation with Grok AI for coding assistance, debugging, and learning |
 | **Streaming Responses** | Token-by-token streaming for responsive, natural feedback |
-| **8 Powerful Tools** | Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch - everything you need |
+| **13 Tools** | Read, Write, Edit, MultiEdit, Glob, Grep, Bash + bg ops, WebFetch, WebSearch, TodoWrite, ExitPlanMode |
 | **Permission System** | Color-coded risk levels with granular session-based approvals |
 | **Dynamic Model Support** | Automatically fetches latest models from xAI API |
 
@@ -683,7 +692,7 @@ Type these at the start of your message for quick actions:
 
 ## Available Tools
 
-Grok Code has access to **8 powerful tools** that enable it to interact with your codebase and the web:
+Grok Code has access to **13 tools** that enable it to interact with your codebase, run commands, and the web. Tools marked Low Risk auto-approve in many setups; Medium and High Risk prompt for permission unless you pass `--yes`:
 
 ### 📖 Read Tool (Low Risk)
 
@@ -767,6 +776,31 @@ Grok: [Uses Edit tool with old_string: "/api/v1", new_string: "/api/v2"]
 
 ---
 
+### 🔁 MultiEdit Tool (Medium Risk)
+
+Apply many string replacements to **one** file in a single atomic call. Edits are applied sequentially in order — each operates on the result of the previous one. If any edit fails (string not found, ambiguous match), no changes are written.
+
+```
+Capabilities:
+  ✓ Atomic — all edits land or none do
+  ✓ Each edit honors `replace_all`
+  ✓ Returns one combined diff for the whole batch
+
+Use cases:
+  → Renaming a symbol across many call sites in one file
+  → Refactoring imports + their references in one pass
+  → Editing surrounding lines after a structural change
+```
+
+**Example Usage:**
+```
+You: Rename `userId` to `accountId` everywhere in src/auth.ts
+Grok: [Uses MultiEdit with three edits in src/auth.ts]
+      ⎿ 3 edits to src/auth.ts — +12 -12 lines
+```
+
+---
+
 ### ⚡ Bash Tool (High Risk)
 
 Execute shell commands with security validation.
@@ -798,6 +832,30 @@ Limits:
 ✗ > /dev/sda                  # Device destruction
 ✗ :(){:|:&};:                 # Fork bombs
 ```
+
+**Background commands.** Long-running commands (servers, watchers, lengthy builds) can be started with `run_in_background: true`, returning a `bash_id` immediately. The model can then poll output incrementally:
+
+```
+You: Start the dev server, then run the tests.
+Grok: ● Bash(npm run dev) (background)
+        ⎿ Background bash_1 started
+      ● Bash(npm test)
+        ⎿ 124 passed, 0 failed
+      ● BashOutput(bash_1)
+        ⎿ stdout: Listening on :3000
+```
+
+---
+
+### 🟢 BashOutput Tool (Low Risk)
+
+Read incremental output from a background Bash process by `bash_id`. Cursor-based: each call returns only output produced since the previous read. Optional `filter` regex.
+
+---
+
+### 🛑 KillBash Tool (High Risk)
+
+Terminate a background Bash process by `bash_id`. Sends SIGTERM, then SIGKILL after 3 seconds if still running.
 
 ---
 
@@ -922,6 +980,46 @@ Found 10 results
 Sources:
   • [React Hooks Best Practices](https://react.dev/reference/react)
   • [10 React Hooks Best Practices](https://blog.example.com/react-hooks)
+```
+
+---
+
+### ✅ TodoWrite Tool (Low Risk)
+
+Maintain a structured plan for the current session. The assistant calls TodoWrite at the start of any non-trivial multi-step task and updates it as work progresses; you see the live list inline.
+
+```
+Capabilities:
+  ✓ At most one item `in_progress` at a time
+  ✓ Renders as a tiranga-coloured list with strike-through for done items
+  ✓ Replaces the entire list per call (atomic)
+
+Statuses:
+  ○  pending
+  ●  in_progress (saffron)
+  ✔  completed (India green)
+```
+
+**Example Usage:**
+```
+Grok: ● TodoWrite(0/3 done)
+        ⎿ Todos · 0/3 done · 1 in progress
+        ○ Read auth middleware
+        ● Adding OpenRouter support
+        ○ Add unit tests
+```
+
+---
+
+### 📋 ExitPlanMode Tool (Medium Risk)
+
+When you toggle `/plan`, side-effecting tools (Write, Edit, MultiEdit, Bash, KillBash) are blocked. The assistant explores read-only, then calls **ExitPlanMode** with a proposed plan. You're shown the plan and asked to approve before plan mode is lifted.
+
+```
+Capabilities:
+  ✓ Hard guard against accidental writes during planning
+  ✓ One-shot approval prompt with the full plan rendered as markdown
+  ✓ Plan-mode also gates tool use (read-only research only)
 ```
 
 ---

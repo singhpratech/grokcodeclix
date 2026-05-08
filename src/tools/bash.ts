@@ -1,19 +1,30 @@
 import { spawn } from 'child_process';
 import { ToolResult } from './registry.js';
 import { validateCommand, sanitizeOutput } from '../utils/security.js';
+import { startBackgroundBash } from './bash_bg.js';
 import chalk from 'chalk';
 
 export interface BashToolParams {
   command: string;
   timeout?: number;
   cwd?: string;
+  run_in_background?: boolean;
+  description?: string;
 }
 
 // Maximum output size to prevent memory issues
 const MAX_OUTPUT_SIZE = 1024 * 1024; // 1MB
+// Hard ceiling for foreground commands — anything that needs to run longer
+// should be launched with run_in_background and polled via BashOutput.
+const MAX_FG_TIMEOUT = 600000; // 10 minutes
 
 export async function bashTool(params: BashToolParams): Promise<ToolResult> {
-  const timeout = params.timeout ?? 120000; // 2 minutes default
+  if (params.run_in_background) {
+    return startBackgroundBash({ command: params.command, cwd: params.cwd });
+  }
+
+  const requested = params.timeout ?? 120000;
+  const timeout = Math.min(Math.max(1000, requested), MAX_FG_TIMEOUT);
 
   // Security validation
   const security = validateCommand(params.command);

@@ -218,9 +218,13 @@ await section('Tool execution', async () => {
   const { executeTool, allTools } = await import(`${DIST}/tools/registry.js`);
 
   // All tools registered
-  assertEq(allTools.length, 8, '8 tools in registry');
   const toolNames = allTools.map((t) => t.function.name).sort();
-  assertEq(toolNames, ['Bash', 'Edit', 'Glob', 'Grep', 'Read', 'WebFetch', 'WebSearch', 'Write'], 'all tool names present');
+  const expected = [
+    'Bash', 'BashOutput', 'Edit', 'ExitPlanMode', 'Glob', 'Grep', 'KillBash',
+    'MultiEdit', 'Read', 'TodoWrite', 'WebFetch', 'WebSearch', 'Write',
+  ];
+  assertEq(allTools.length, expected.length, `${expected.length} tools in registry`);
+  assertEq(toolNames, expected, 'all tool names present');
 
   // Write
   const testFile = path.join(TMP, 'test.txt');
@@ -282,6 +286,105 @@ await section('Tool execution', async () => {
   // Bash — non-zero exit
   const bashFail = await executeTool('Bash', { command: 'exit 1' });
   assert(!bashFail.success, 'Bash non-zero exit is failure');
+
+  // Bash — timeout enforced
+  const bashTimeout = await executeTool('Bash', { command: 'sleep 5', timeout: 1000 });
+  assert(!bashTimeout.success, 'Bash timeout produces failure');
+  assert(/timed out/i.test(bashTimeout.error || ''), 'Bash timeout error mentions timeout');
+
+  // MultiEdit — happy path
+  const meFile = path.join(TMP, 'multi.txt');
+  await executeTool('Write', { file_path: meFile, content: 'foo\nbar\nbaz\nfoo' });
+  const meResult = await executeTool('MultiEdit', {
+    file_path: meFile,
+    edits: [
+      { old_string: 'bar', new_string: 'BAR' },
+      { old_string: 'baz', new_string: 'BAZ' },
+      { old_string: 'foo', new_string: 'FOO', replace_all: true },
+    ],
+  });
+  assert(meResult.success, 'MultiEdit succeeded');
+  const meAfter = await executeTool('Read', { file_path: meFile });
+  assert(meAfter.output.includes('FOO'), 'MultiEdit applied first edit');
+  assert(meAfter.output.includes('BAR'), 'MultiEdit applied second edit');
+  assert(meAfter.output.includes('BAZ'), 'MultiEdit applied third edit');
+
+  // MultiEdit — atomic on failure (one bad edit aborts the rest)
+  const meFile2 = path.join(TMP, 'multi2.txt');
+  await executeTool('Write', { file_path: meFile2, content: 'alpha\nbeta' });
+  const meBad = await executeTool('MultiEdit', {
+    file_path: meFile2,
+    edits: [
+      { old_string: 'alpha', new_string: 'ALPHA' },
+      { old_string: 'nope', new_string: 'X' },
+    ],
+  });
+  assert(!meBad.success, 'MultiEdit fails when an edit is unmatched');
+  const meBadAfter = await executeTool('Read', { file_path: meFile2 });
+  assert(meBadAfter.output.includes('alpha'), 'MultiEdit atomic — file unchanged on failure');
+
+  // TodoWrite — persists state
+  const twResult = await executeTool('TodoWrite', {
+    todos: [
+      { content: 'Task one', status: 'completed' },
+      { content: 'Task two', status: 'in_progress', activeForm: 'Doing task two' },
+      { content: 'Task three', status: 'pending' },
+    ],
+  });
+  assert(twResult.success, 'TodoWrite succeeded');
+  assert(twResult.display?.preview, 'TodoWrite returns rendered preview');
+  const { todoState } = await import(`${DIST}/tools/todowrite.js`);
+  assertEq(todoState.items.length, 3, 'TodoWrite stored 3 items');
+
+  // TodoWrite — rejects two in_progress
+  const twBad = await executeTool('TodoWrite', {
+    todos: [
+      { content: 'A', status: 'in_progress' },
+      { content: 'B', status: 'in_progress' },
+    ],
+  });
+  assert(!twBad.success, 'TodoWrite rejects multiple in_progress');
+
+  // Background bash + BashOutput + KillBash
+  const bgStart = await executeTool('Bash', {
+    command: 'for i in 1 2 3 4 5; do echo line-$i; sleep 0.2; done',
+    run_in_background: true,
+  });
+  assert(bgStart.success, 'Bash run_in_background started');
+  const idMatch = bgStart.output.match(/bash_\d+/);
+  assert(idMatch, 'Bash background returns bash_id');
+  const bgId = idMatch[0];
+  // Wait for some output to accumulate
+  await new Promise((r) => setTimeout(r, 600));
+  const bgOut = await executeTool('BashOutput', { bash_id: bgId });
+  assert(bgOut.success, 'BashOutput read succeeded');
+  assert(/line-/.test(bgOut.output), 'BashOutput returns streamed lines');
+  // Cursor: a second read returns less / no duplicate output
+  const bgOut2 = await executeTool('BashOutput', { bash_id: bgId });
+  assert(bgOut2.success, 'BashOutput second read succeeded');
+  assert(
+    bgOut2.output.length <= bgOut.output.length + 200,
+    'BashOutput cursor advances (no duplicate output)'
+  );
+  // Kill it
+  const kill = await executeTool('KillBash', { bash_id: bgId });
+  assert(kill.success, 'KillBash succeeded');
+
+  // BashOutput on unknown id
+  const bgBad = await executeTool('BashOutput', { bash_id: 'bash_99999' });
+  assert(!bgBad.success, 'BashOutput rejects unknown id');
+
+  // ExitPlanMode — flips request flag
+  const { planExitState } = await import(`${DIST}/tools/exitplan.js`);
+  planExitState.requested = false;
+  const ep = await executeTool('ExitPlanMode', { plan: '1. Read files\n2. Write changes' });
+  assert(ep.success, 'ExitPlanMode succeeded');
+  assertEq(planExitState.requested, true, 'ExitPlanMode flips request flag');
+  planExitState.requested = false; // reset for cleanliness
+
+  // ExitPlanMode without plan
+  const epBad = await executeTool('ExitPlanMode', {});
+  assert(!epBad.success, 'ExitPlanMode rejects empty plan');
 
   // Unknown tool
   const unknown = await executeTool('BogusTool', {});
@@ -619,6 +722,80 @@ await section('Memory hierarchy', async () => {
   } finally {
     process.chdir(origCwd);
   }
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 13. Provider detection & OpenRouter routing
+// ───────────────────────────────────────────────────────────────────────────
+await section('Provider detection (OpenRouter / xAI)', async () => {
+  const {
+    GrokClient,
+    detectProvider,
+    providerBaseUrl,
+    normaliseModelForProvider,
+  } = await import(`${DIST}/grok/client.js`);
+
+  assertEq(detectProvider('xai-abc'), 'xai', 'xai- prefix → xai');
+  assertEq(detectProvider('sk-or-v1-abc'), 'openrouter', 'sk-or- prefix → openrouter');
+  assertEq(detectProvider('plain-string'), 'xai', 'unknown prefix → xai default');
+
+  assertEq(providerBaseUrl('xai'), 'https://api.x.ai/v1', 'xai base URL');
+  assertEq(providerBaseUrl('openrouter'), 'https://openrouter.ai/api/v1', 'openrouter base URL');
+
+  assertEq(
+    normaliseModelForProvider('grok-4-1-fast-reasoning', 'openrouter'),
+    'x-ai/grok-4.1-fast',
+    'maps grok-4-1 reasoning to x-ai/grok-4.1-fast'
+  );
+  assertEq(
+    normaliseModelForProvider('grok-code-fast-1', 'openrouter'),
+    'x-ai/grok-code-fast-1',
+    'maps grok-code-fast-1'
+  );
+  assertEq(
+    normaliseModelForProvider('grok-4', 'xai'),
+    'grok-4',
+    'xai keeps canonical name'
+  );
+  assertEq(
+    normaliseModelForProvider('x-ai/grok-4', 'xai'),
+    'grok-4',
+    'xai strips x-ai/ prefix'
+  );
+
+  // GrokClient picks up provider from key prefix
+  const orClient = new GrokClient('sk-or-v1-test', 'grok-4');
+  assertEq(orClient.provider, 'openrouter', 'GrokClient detects OpenRouter from key');
+  assertEq(orClient.model, 'x-ai/grok-4', 'GrokClient normalises model to OpenRouter slug');
+
+  const xaiClient = new GrokClient('xai-test', 'grok-4-1-fast-reasoning');
+  assertEq(xaiClient.provider, 'xai', 'GrokClient detects xAI from key');
+  assertEq(xaiClient.model, 'grok-4-1-fast-reasoning', 'GrokClient keeps canonical xAI model');
+
+  // Override via options.provider
+  const overridden = new GrokClient('xai-test', 'grok-4', { provider: 'openrouter' });
+  assertEq(overridden.provider, 'openrouter', 'explicit provider override wins');
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 14. New tool registration (MultiEdit / TodoWrite / Bash bg / ExitPlanMode)
+// ───────────────────────────────────────────────────────────────────────────
+await section('New tool registration', async () => {
+  const { allTools } = await import(`${DIST}/tools/registry.js`);
+  const names = allTools.map((t) => t.function.name);
+  for (const t of ['MultiEdit', 'TodoWrite', 'BashOutput', 'KillBash', 'ExitPlanMode']) {
+    assert(names.includes(t), `${t} registered`);
+    const def = allTools.find((x) => x.function.name === t);
+    assert(def?.function?.description?.length > 20, `${t} has a real description`);
+    assert(def?.function?.parameters?.required?.length >= 0, `${t} has params schema`);
+  }
+
+  // Bash now advertises run_in_background
+  const bash = allTools.find((t) => t.function.name === 'Bash');
+  assert(
+    'run_in_background' in (bash?.function?.parameters?.properties || {}),
+    'Bash advertises run_in_background param'
+  );
 });
 
 // ───────────────────────────────────────────────────────────────────────────
