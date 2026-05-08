@@ -9,6 +9,7 @@ import { GrokClient, GrokMessage, GrokContentPart, ToolCall, ChatOptions as Grok
 import { allTools, executeTool, ToolResult } from '../tools/registry.js';
 import { planExitState } from '../tools/exitplan.js';
 import { todoState, renderTodoList } from '../tools/todowrite.js';
+import { NAAVI_MASCOT } from '../utils/mascot.js';
 import { PermissionManager } from '../permissions/manager.js';
 import { HistoryManager, ConversationSession } from './history.js';
 import { ConfigManager } from '../config/manager.js';
@@ -543,6 +544,15 @@ export class GrokChat {
   }
 
   private printWelcome(resumedTitle?: string): void {
+    // Print Naavi GrokAavi mascot art at the top in 24-bit colour.
+    // Suppressed when stdout isn't a TTY (pipes, CI logs) and when the
+    // terminal is too narrow to fit it cleanly.
+    if (process.stdout.isTTY && (process.stdout.columns || 80) >= 36) {
+      console.log();
+      console.log(NAAVI_MASCOT);
+      console.log();
+    }
+
     // Claude Code-style welcome: small bordered box with star icon,
     // a help hint line, and the working directory.
     const width = Math.min(process.stdout.columns || 62, 62);

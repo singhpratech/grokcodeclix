@@ -63,12 +63,14 @@ export async function generateImageTool(params: GenerateImageParams): Promise<To
 
   const n = Math.max(1, Math.min(params.n ?? 1, 4));
   const baseUrl = provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : 'https://api.x.ai/v1';
-  // xAI exposes the grok-imagine-* family for image generation; the older
-  // grok-2-image alias was removed for new accounts. OpenRouter still uses
-  // x-ai/grok-2-image as its slug.
+  // Default model per provider:
+  //   xAI:        grok-imagine-image  (the older grok-2-image alias is gone)
+  //   OpenRouter: x-ai/grok-2-image still works, but Gemini 3 Pro Image
+  //               (Nano Banana Pro) gives much higher quality. The user
+  //               can override with params.model.
   const model =
     params.model ||
-    (provider === 'openrouter' ? 'x-ai/grok-2-image' : 'grok-imagine-image');
+    (provider === 'openrouter' ? 'google/gemini-3-pro-image-preview' : 'grok-imagine-image');
   const outDir = path.resolve(params.output_dir || './grok-images');
 
   const headers: Record<string, string> = {
@@ -80,27 +82,71 @@ export async function generateImageTool(params: GenerateImageParams): Promise<To
     headers['X-Title'] = 'Grok Code CLI';
   }
 
-  let response: Response;
-  try {
-    response = await fetch(`${baseUrl}/images/generations`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ prompt, model, n, response_format: 'b64_json' }),
-    });
-  } catch (error) {
-    return { success: false, output: '', error: `Network error: ${(error as Error).message}` };
-  }
+  // Two API shapes share one tool:
+  //   1. /v1/images/generations  — OpenAI-style, returns { data: [{ b64_json }] }
+  //      Used by xAI grok-imagine-image and OpenRouter x-ai/grok-2-image.
+  //   2. /v1/chat/completions    — used by Gemini's image models on OpenRouter.
+  //      Returns assistant message with `images: [{ image_url: { url: data:... } }]`.
+  //
+  // Detect by model id: any Gemini / Imagen / GPT-Image / Stable-Diffusion
+  // model on OpenRouter goes through chat completions with `modalities`.
+  const useChatPath =
+    provider === 'openrouter' &&
+    /(gemini.*image|imagen|gpt-.*image|stable-diffusion|flux|dall-e-3)/i.test(model);
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    return {
-      success: false,
-      output: '',
-      error: `Image generation failed (${response.status}): ${text.slice(0, 400)}`,
+  let payload: GeneratedImagePayload;
+  if (useChatPath) {
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model,
+          modalities: ['image', 'text'],
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+    } catch (error) {
+      return { success: false, output: '', error: `Network error: ${(error as Error).message}` };
+    }
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      return { success: false, output: '', error: `Image generation failed (${response.status}): ${text.slice(0, 400)}` };
+    }
+    const chat = (await response.json()) as {
+      choices?: Array<{ message?: { images?: Array<{ image_url?: { url?: string } }> } }>;
     };
+    const images = chat.choices?.[0]?.message?.images || [];
+    payload = {
+      data: images
+        .map((im) => {
+          const url = im?.image_url?.url || '';
+          const m = url.match(/^data:image\/[^;]+;base64,(.+)$/);
+          if (m) return { b64_json: m[1] };
+          if (url.startsWith('http')) return { url };
+          return null;
+        })
+        .filter((x): x is NonNullable<typeof x> => !!x),
+    };
+  } else {
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl}/images/generations`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ prompt, model, n, response_format: 'b64_json' }),
+      });
+    } catch (error) {
+      return { success: false, output: '', error: `Network error: ${(error as Error).message}` };
+    }
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      return { success: false, output: '', error: `Image generation failed (${response.status}): ${text.slice(0, 400)}` };
+    }
+    payload = (await response.json()) as GeneratedImagePayload;
   }
 
-  const payload = (await response.json()) as GeneratedImagePayload;
   if (!payload.data || payload.data.length === 0) {
     return { success: false, output: '', error: 'API returned no images' };
   }
