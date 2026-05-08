@@ -63,14 +63,17 @@ export async function generateImageTool(params: GenerateImageParams): Promise<To
 
   const n = Math.max(1, Math.min(params.n ?? 1, 4));
   const baseUrl = provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : 'https://api.x.ai/v1';
-  // Default model per provider:
+  // Default model per provider — Grok-first on both, since the tool is
+  // branded grokclix and users expect their xAI/OpenRouter spend to go
+  // to Grok unless they explicitly ask otherwise.
   //   xAI:        grok-imagine-image  (the older grok-2-image alias is gone)
-  //   OpenRouter: x-ai/grok-2-image still works, but Gemini 3 Pro Image
-  //               (Nano Banana Pro) gives much higher quality. The user
-  //               can override with params.model.
+  //   OpenRouter: x-ai/grok-2-image
+  // Override via params.model — e.g. `google/gemini-3-pro-image-preview`
+  // (Nano Banana Pro) does produce better image quality, but that's an
+  // opt-in, not the default.
   const model =
     params.model ||
-    (provider === 'openrouter' ? 'google/gemini-3-pro-image-preview' : 'grok-imagine-image');
+    (provider === 'openrouter' ? 'x-ai/grok-2-image' : 'grok-imagine-image');
   const outDir = path.resolve(params.output_dir || './grok-images');
 
   const headers: Record<string, string> = {

@@ -644,6 +644,11 @@ export class GrokChat {
     console.log(line(chalk.dim('  /help for help, /status for your current setup')));
     console.log(line(''));
     console.log(line(chalk.dim('  cwd: ') + cwd));
+    // Provider + model + base URL — visible up-front so the user can never be
+    // confused about which API their next message is going to.
+    const provTag = this.client.provider === 'xai' ? SAFFRON('xai') : chalk.cyan('openrouter');
+    const baseUrl = this.client.provider === 'xai' ? 'api.x.ai/v1' : 'openrouter.ai/api/v1';
+    console.log(line(chalk.dim('  api: ') + provTag + chalk.dim(' · ') + chalk.white(this.client.model) + chalk.dim(' · ') + chalk.dim(baseUrl)));
     if (resumedTitle) {
       console.log(line(chalk.dim('  resumed: ') + chalk.yellow(resumedTitle)));
     }
@@ -692,8 +697,14 @@ export class GrokChat {
         }
 
         const modelLabel = (this.thinkingMode ? '🧠 ' : '⚡ ') + this.client.model;
+        // Provider tag — saffron for xAI direct, cyan for OpenRouter — so the
+        // user always knows whose API the next message is going to and there's
+        // no surprise on the billing dashboard.
+        const providerTag = this.client.provider === 'xai'
+          ? SAFFRON('xai')
+          : chalk.cyan('openrouter');
         const left = chalk.dim('  ') + modeBadges.join(chalk.dim(' · '));
-        const right = chalk.dim('⎿  ▾  ') + chalk.white(modelLabel);
+        const right = chalk.dim('⎿  ▾  ') + chalk.white(modelLabel) + chalk.dim(' on ') + providerTag;
         const visibleLen = (s: string): number => s.replace(/\x1B\[[0-9;]*m/g, '').length;
         const padCount = Math.max(2, width - visibleLen(left) - visibleLen(right));
         const footer = left + ' '.repeat(padCount) + right;
@@ -1343,7 +1354,11 @@ export class GrokChat {
 
     console.log(chalk.bold('  Version & model'));
     console.log(`    Version:   ${VERSION}`);
-    console.log(`    Model:     ${this.client.model}`);
+    const provLabel = this.client.provider === 'xai'
+      ? SAFFRON('xai') + chalk.dim(' (api.x.ai/v1)')
+      : chalk.cyan('openrouter') + chalk.dim(' (openrouter.ai/api/v1)');
+    console.log(`    Provider:  ${provLabel}`);
+    console.log(`    Model:     ${chalk.white(this.client.model)}`);
     console.log(`    Mode:      ${this.thinkingMode ? '🧠 Thinking' : '⚡ Fast'}${this.planMode ? chalk.yellow(' · plan mode') : ''}`);
     console.log(`    Streaming: ${this.useStreaming ? 'on' : 'off'}`);
     console.log(`    Style:     ${this.outputStyle}`);

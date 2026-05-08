@@ -98,9 +98,9 @@ export async function speakTextTool(params: SpeakTextParams): Promise<ToolResult
 
   return {
     success: true,
-    output: `Generated speech (${voice}, ${format}) — saved to ${outPath} (${(buffer.length / 1024).toFixed(1)} KB)`,
+    output: `Generated speech via ${model} (${voice}, ${format}) — saved to ${outPath} (${(buffer.length / 1024).toFixed(1)} KB)`,
     display: {
-      summary: `Speech → ${displayPath} (${voice}, ${format})`,
+      summary: `Speech → ${displayPath} (${model}, ${voice}, ${format})`,
     },
   };
 }

@@ -121,7 +121,7 @@ export async function transcribeAudioTool(params: TranscribeAudioParams): Promis
         success: true,
         output: r.text,
         display: {
-          summary: `Transcribed ${path.basename(audioPath)}${r.language ? ` (${r.language})` : ''} via xAI`,
+          summary: `Transcribed ${path.basename(audioPath)}${r.language ? ` (${r.language})` : ''} via xAI ${xaiModel}`,
           preview: r.text.length > 400 ? r.text.slice(0, 400) + '…' : r.text,
         },
       };
@@ -160,7 +160,7 @@ export async function transcribeAudioTool(params: TranscribeAudioParams): Promis
     success: true,
     output: r.text,
     display: {
-      summary: `Transcribed ${path.basename(audioPath)}${r.language ? ` (${r.language})` : ''} via OpenRouter`,
+      summary: `Transcribed ${path.basename(audioPath)}${r.language ? ` (${r.language})` : ''} via OpenRouter ${orModel} (xAI/Grok has no public STT yet — pass --model to override)`,
       preview: r.text.length > 400 ? r.text.slice(0, 400) + '…' : r.text,
     },
   };
