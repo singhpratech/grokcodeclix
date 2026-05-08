@@ -1,59 +1,57 @@
 #!/usr/bin/env python3
 """
-Convert mascot.png to ANSI terminal art using Unicode half-block (▀).
+Convert mascot.png to ANSI terminal art using Unicode quarter-block glyphs.
 
-Each row of characters represents 2 vertical pixels (fg = top, bg = bottom).
-We auto-detect the source background colour from the four corners; pixels
-close to that colour are rendered as transparent so the mascot floats on
-the user's actual terminal background.
+Each output cell is 1 char × 1 row in the terminal but encodes a 2×2 grid
+of source pixels by choosing the right Unicode quadrant glyph (▘▝▀▖▌▞▛▗▚▐▜▄▙▟█)
+together with a single foreground + single background colour.  This gives
+4× the effective resolution of the simpler half-block render — eyes,
+markings, and ear tips become recognisable instead of a colour mush.
 
-For flat-design source images we additionally **quantize** the source to a
-small theme palette (saffron, India-green, deep blue, white, amber, black)
-before scaling. Quantization snaps every pixel to one of those exact brand
-colours, which is what gives the terminal mascot a clean iconic look
-instead of a fuzzy 30-colour blur.
+Pipeline:
+  1. Crop the source down to the subject.
+  2. Resize to (TARGET_W * 2) × (TARGET_H * 2) pixels using LANCZOS so each
+     output cell maps to a 2×2 pixel block.
+  3. For each 2×2 block, pick 2 representative colours (k-means with k=2
+     done by largest pairwise distance), assign each pixel to the nearest,
+     and emit the glyph that matches the binary pattern.
+  4. Skip any block whose pixels all match the corner-detected background
+     so the mascot floats on the user's terminal background.
 
-To regenerate after changing mascot.png:
+Run after editing mascot.png:
     python3 tools/digitize-mascot.py
 """
 
-from PIL import Image
+from PIL import Image, ImageEnhance
 from pathlib import Path
 
 SRC = Path('/home/papapratlinux/Documents/grokcodeclix/docs/assets/mascot.png')
 DST_TS = Path('/home/papapratlinux/Documents/grokcodeclix/src/utils/mascot.ts')
 
-# Target terminal cell dimensions.
-# Each cell is 1 char wide and 2 image-pixels tall.
-TARGET_W = 24    # cell columns. 24 reads cleanly even on a 36-col terminal.
-TARGET_H = 24    # pixel rows; → 12 cell rows
+TARGET_W = 24    # cell columns. With quarter-block this gives 48px-wide
+                 # subject coverage — wide enough for legible features and
+                 # narrow enough to sit above the welcome box (62 cols).
 
-
-# Tiranga-themed brand palette. Every output pixel snaps to one of these.
-# Order matters only insofar as RGB exactness — the choice of colour is
-# done by nearest-neighbour distance.
-PALETTE = [
-    (255, 255, 255),  # white (background card / hair)
-    (0, 0, 0),        # black (outline)
-    (255, 153,  51),  # saffron (#FF9933)
-    ( 19, 136,   8),  # India green (#138808)
-    ( 30,  58, 138),  # deep blue (Navi skin #1E3A8A)
-    ( 64, 110, 204),  # mid blue (skin highlight)
-    (255, 191,   0),  # amber yellow (eyes)
-    (210, 210, 210),  # light grey (anti-aliasing fallback)
-]
-
-
-def quantize_to_palette(img: Image.Image) -> Image.Image:
-    """Snap every pixel of img to its nearest entry in PALETTE."""
-    rgb = img.convert('RGB')
-    pal_img = Image.new('P', (1, 1))
-    flat = []
-    for c in PALETTE:
-        flat.extend(c)
-    flat.extend([0] * (256 * 3 - len(flat)))
-    pal_img.putpalette(flat)
-    return rgb.quantize(palette=pal_img, dither=Image.Dither.NONE).convert('RGB')
+# Each tuple: (top-left, top-right, bottom-left, bottom-right) of the cell.
+# 1 = foreground, 0 = background.
+GLYPHS = {
+    (0, 0, 0, 0): ' ',
+    (1, 0, 0, 0): '▘',
+    (0, 1, 0, 0): '▝',
+    (1, 1, 0, 0): '▀',
+    (0, 0, 1, 0): '▖',
+    (1, 0, 1, 0): '▌',
+    (0, 1, 1, 0): '▞',
+    (1, 1, 1, 0): '▛',
+    (0, 0, 0, 1): '▗',
+    (1, 0, 0, 1): '▚',
+    (0, 1, 0, 1): '▐',
+    (1, 1, 0, 1): '▜',
+    (0, 0, 1, 1): '▄',
+    (1, 0, 1, 1): '▙',
+    (0, 1, 1, 1): '▟',
+    (1, 1, 1, 1): '█',
+}
 
 
 def detect_bg_colour(img: Image.Image):
@@ -63,7 +61,7 @@ def detect_bg_colour(img: Image.Image):
     w, h = rgb.size
     corners = [px[0, 0], px[w - 1, 0], px[0, h - 1], px[w - 1, h - 1]]
 
-    def close(a, b, tol=22):
+    def close(a, b, tol=18):
         return all(abs(a[i] - b[i]) <= tol for i in range(3))
 
     if all(close(corners[0], c) for c in corners[1:]):
@@ -80,8 +78,8 @@ def trim_to_subject(img: Image.Image, bg) -> Image.Image:
     def is_background(c):
         if bg is None:
             r, g, b = c
-            return r + g + b < 165
-        return all(abs(c[i] - bg[i]) <= 24 for i in range(3))
+            return r + g + b > 720  # near-white fallback
+        return all(abs(c[i] - bg[i]) <= 22 for i in range(3))
 
     cols = []
     for x in range(w):
@@ -97,7 +95,7 @@ def trim_to_subject(img: Image.Image, bg) -> Image.Image:
                 break
     if not cols or not rows:
         return rgb
-    pad = 6
+    pad = 8
     left = max(0, min(cols) - pad)
     right = min(w, max(cols) + pad)
     top = max(0, min(rows) - pad)
@@ -105,49 +103,143 @@ def trim_to_subject(img: Image.Image, bg) -> Image.Image:
     return rgb.crop((left, top, right, bot))
 
 
-def make_ansi(img: Image.Image, target_w: int, target_h: int, bg_color=None) -> str:
-    """Render image as Unicode half-block (▀ / ▄) ANSI art."""
-    if target_h % 2 == 1:
-        target_h += 1
+def dist2(a, b):
+    return sum((a[i] - b[i]) ** 2 for i in range(3))
 
+
+def two_colour_split(quad):
+    """Pick FG and BG colours for a 4-pixel quadrant.
+
+    Strategy: find the two pixels with the largest pairwise colour distance,
+    treat them as cluster seeds, then assign the other two to whichever
+    seed they're closer to. Returns (fg, bg, mask) where mask is the 4-tuple
+    of {0,1} flags in (TL, TR, BL, BR) order.
+    """
+    if len(set(quad)) == 1:
+        c = quad[0]
+        return c, c, (1, 1, 1, 1)
+
+    # Find max-distance pair.
+    best = (0, 1)
+    best_d = -1
+    for i in range(4):
+        for j in range(i + 1, 4):
+            d = dist2(quad[i], quad[j])
+            if d > best_d:
+                best_d = d
+                best = (i, j)
+    a_idx, b_idx = best
+    a, b = quad[a_idx], quad[b_idx]
+
+    # Compute mean of pixels assigned to each cluster.
+    a_pix = [a]
+    b_pix = [b]
+    for k in range(4):
+        if k in (a_idx, b_idx):
+            continue
+        if dist2(quad[k], a) <= dist2(quad[k], b):
+            a_pix.append(quad[k])
+        else:
+            b_pix.append(quad[k])
+
+    def mean(ps):
+        n = len(ps)
+        return tuple(sum(p[i] for p in ps) // n for i in range(3))
+
+    fg = mean(a_pix)
+    bg = mean(b_pix)
+
+    mask = []
+    for k in range(4):
+        if dist2(quad[k], fg) <= dist2(quad[k], bg):
+            mask.append(1)
+        else:
+            mask.append(0)
+    return fg, bg, tuple(mask)
+
+
+def make_ansi(img: Image.Image, target_w: int, bg_color=None) -> str:
+    """Render image as Unicode quarter-block ANSI art."""
     iw, ih = img.size
     aspect = ih / iw
-    pixel_w = target_w
-    pixel_h = max(1, round(pixel_w * aspect))
+
+    # Each cell encodes a 2×2 pixel block, and terminal cells are ~1:2 (w:h).
+    # So one square image-pixel ≈ one cell horizontally, two cells vertically
+    # ... no — each cell holds 2 vertical pixels in the half-block approach.
+    # Quarter-block puts 2 vertical pixels in the SAME cell, so rows are now
+    # half as tall. To preserve aspect we want pixel_h == round(pixel_w * aspect)
+    # but rendered into target_h = pixel_h / 2 cell rows. Keep it simple: use
+    # the source's aspect and compute pixel grid; the ratio works out.
+    pixel_w = target_w * 2
+    pixel_h = max(2, round(pixel_w * aspect))
     if pixel_h % 2 == 1:
         pixel_h += 1
-    pixel_h = min(pixel_h, target_h)
 
-    # NEAREST scaling preserves the quantized palette colours; LANCZOS would
-    # mix them and re-introduce noise.
-    img = img.resize((pixel_w, pixel_h), Image.NEAREST).convert('RGB')
+    # Quarter-block cells are 2×2 pixels but terminal cells are taller than
+    # wide. Halve the pixel_h so the rendered art is roughly square in the
+    # terminal (1 cell wide ≈ 2 cells tall in physical pixels).
+    pixel_h_render = max(2, pixel_h // 2)
+    if pixel_h_render % 2 == 1:
+        pixel_h_render += 1
 
-    def is_bg(c, tol=24):
+    # Light contrast boost helps the small face read better — flat-icon
+    # source colours are already saturated but downsampling softens them.
+    boosted = ImageEnhance.Contrast(img).enhance(1.10)
+    boosted = ImageEnhance.Color(boosted).enhance(1.15)
+    boosted = boosted.resize((pixel_w, pixel_h_render), Image.LANCZOS).convert('RGB')
+
+    def is_bg(c, tol=22):
         if bg_color is None:
             return False
         return all(abs(c[i] - bg_color[i]) <= tol for i in range(3))
 
     out_lines = []
-    pixels = img.load()
-    for y in range(0, pixel_h, 2):
+    pixels = boosted.load()
+    target_h_cells = pixel_h_render // 2
+    for cy in range(target_h_cells):
         line = ''
-        for x in range(pixel_w):
-            top = pixels[x, y]
-            bot = pixels[x, y + 1] if (y + 1) < pixel_h else top
-            top_bg = is_bg(top)
-            bot_bg = is_bg(bot)
+        for cx in range(target_w):
+            x0, y0 = cx * 2, cy * 2
+            tl = pixels[x0, y0]
+            tr = pixels[x0 + 1, y0]
+            bl = pixels[x0, y0 + 1]
+            br = pixels[x0 + 1, y0 + 1]
 
-            line += '\x1b[0m'  # reset between cells (defensive, cheap)
-            if top_bg and bot_bg:
-                line += ' '
-            elif top_bg and not bot_bg:
-                line += f'\x1b[38;2;{bot[0]};{bot[1]};{bot[2]}m▄'
-            elif not top_bg and bot_bg:
-                line += f'\x1b[38;2;{top[0]};{top[1]};{top[2]}m▀'
+            quad = (tl, tr, bl, br)
+
+            # If every pixel matches the page background, render the cell
+            # as a transparent space so the welcome box / shell background
+            # shows through.
+            if all(is_bg(p) for p in quad):
+                line += '\x1b[0m '
+                continue
+
+            fg, bg, mask = two_colour_split(quad)
+
+            # If FG and BG are within a tight tolerance, treat the cell as
+            # a single solid colour to avoid noisy alternating glyphs.
+            if dist2(fg, bg) < 350:
+                line += f'\x1b[0m\x1b[38;2;{fg[0]};{fg[1]};{fg[2]}m█'
+                continue
+
+            # If one of fg/bg is the page background, replace it with the
+            # default cell (no bg paint) so transparency works at the edges.
+            fg_is_bg = is_bg(fg)
+            bg_is_bg = is_bg(bg)
+
+            glyph = GLYPHS[mask]
+            if bg_is_bg and not fg_is_bg:
+                line += f'\x1b[0m\x1b[38;2;{fg[0]};{fg[1]};{fg[2]}m{glyph}'
+            elif fg_is_bg and not bg_is_bg:
+                # Invert mask + glyph so the non-bg colour becomes FG.
+                inv = tuple(1 - m for m in mask)
+                line += f'\x1b[0m\x1b[38;2;{bg[0]};{bg[1]};{bg[2]}m{GLYPHS[inv]}'
             else:
                 line += (
-                    f'\x1b[38;2;{top[0]};{top[1]};{top[2]}m'
-                    f'\x1b[48;2;{bot[0]};{bot[1]};{bot[2]}m▀'
+                    f'\x1b[0m'
+                    f'\x1b[38;2;{fg[0]};{fg[1]};{fg[2]}m'
+                    f'\x1b[48;2;{bg[0]};{bg[1]};{bg[2]}m'
+                    f'{glyph}'
                 )
         line += '\x1b[0m'
         out_lines.append(line)
@@ -165,10 +257,8 @@ def main():
     cropped = trim_to_subject(img, bg)
     print(f'  after subject crop: {cropped.size}')
 
-    quantized = quantize_to_palette(cropped)
-    print(f'  quantized to {len(PALETTE)}-colour brand palette')
-
-    art = make_ansi(quantized, TARGET_W, TARGET_H, bg_color=bg)
+    bg2 = detect_bg_colour(cropped) or bg
+    art = make_ansi(cropped, TARGET_W, bg_color=bg2)
 
     print('\n=== Preview (true-colour terminal required) ===\n')
     print(art)
@@ -184,16 +274,10 @@ def main():
         ' * Naavi GrokAavi terminal-mascot.\n'
         ' *\n'
         ' * Auto-generated from docs/assets/mascot.png by tools/digitize-mascot.py.\n'
-        ' * Each line is a row of Unicode upper-half-block characters (▀ / ▄)\n'
-        ' * where the foreground colour represents the top pixel and the\n'
-        ' * background colour represents the bottom pixel — so each cell is\n'
-        ' * 1 character wide × 2 image pixels tall. Uses 24-bit colour escapes\n'
-        ' * so it needs a true-colour terminal.\n'
-        ' *\n'
-        ' * The image is quantized to an 8-colour brand palette (saffron,\n'
-        ' * India-green, deep blue, white, black, amber, mid-blue, light grey)\n'
-        ' * before rendering, which keeps the mascot looking like an icon\n'
-        ' * rather than a low-resolution photograph.\n'
+        ' * Each cell is one Unicode quarter-block glyph (▘▝▀▖▌▞▛▗▚▐▜▄▙▟█) that\n'
+        ' * encodes a 2×2 pixel block of the source image, giving 4× the effective\n'
+        ' * resolution of a half-block render. Uses 24-bit colour escapes so it\n'
+        ' * needs a true-colour terminal.\n'
         ' *\n'
         ' * To regenerate: python3 tools/digitize-mascot.py\n'
         ' */\n\n'

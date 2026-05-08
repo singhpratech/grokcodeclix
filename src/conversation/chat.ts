@@ -642,27 +642,50 @@ export class GrokChat {
   private async loop(): Promise<void> {
     const showPrompt = (): Promise<string> => {
       return new Promise((resolve) => {
-        // Build the status-line footer shown above the prompt.
-        // Always shows the current model. Badges for plan mode, fast
-        // mode, and attached images appear inline when active.
-        const modeIcon = this.thinkingMode ? '🧠' : '⚡';
-        const modelBit = chalk.dim(`${modeIcon} `) + chalk.white(this.client.model);
+        // Claude-Code-style boxed input:
+        //
+        //   ╭─────────────────────────────────────────╮
+        //   │ > _                                     │
+        //   ╰─────────────────────────────────────────╯
+        //     ⏵⏵ plan mode on (shift+tab to cycle)        ⎿  ▾  model
+        //
+        // We can't draw the right `│` and bottom `╰─╯` *during* typing
+        // without a full Ink-style renderer, so:
+        //   • top border is printed before the readline prompt
+        //   • prompt becomes `│ > ` (left edge baked in)
+        //   • after the user submits, bottom border + footer are printed
+        // This keeps the visual identical to Claude Code at the moment
+        // the response begins, even if the box is "open-bottom" while the
+        // user is typing.
+        const cols = process.stdout.columns || 80;
+        const width = Math.min(cols - 2, 90);
+        const top = chalk.dim('╭' + '─'.repeat(width - 2) + '╮');
+        const bot = chalk.dim('╰' + '─'.repeat(width - 2) + '╯');
 
-        const badges: string[] = [];
-        if (this.planMode) badges.push(chalk.yellow('plan'));
+        const modeBadges: string[] = [];
+        if (this.planMode) {
+          modeBadges.push(chalk.yellow('⏵⏵ plan mode on') + chalk.dim(' (shift+tab to cycle)'));
+        } else {
+          modeBadges.push(chalk.dim('⏵⏵ ') + chalk.dim('default mode') + chalk.dim(' (shift+tab to cycle)'));
+        }
         if (this.pending.images.length > 0) {
           const n = this.pending.images.length;
-          badges.push(chalk.magenta(`${n} img`));
+          modeBadges.push(chalk.magenta(`${n} image${n === 1 ? '' : 's'} attached`));
         }
 
-        const parts = [modelBit];
-        if (badges.length > 0) parts.push(badges.join(chalk.dim(' · ')));
-        parts.push(chalk.cyan('/') + chalk.dim(' for commands') + chalk.dim(' · ') + chalk.dim('? for shortcuts'));
+        const modelLabel = (this.thinkingMode ? '🧠 ' : '⚡ ') + this.client.model;
+        const left = chalk.dim('  ') + modeBadges.join(chalk.dim(' · '));
+        const right = chalk.dim('⎿  ▾  ') + chalk.white(modelLabel);
+        const visibleLen = (s: string): number => s.replace(/\x1B\[[0-9;]*m/g, '').length;
+        const padCount = Math.max(2, width - visibleLen(left) - visibleLen(right));
+        const footer = left + ' '.repeat(padCount) + right;
 
-        const footer = chalk.dim('  ') + parts.join(chalk.dim(' · '));
-        console.log(footer);
-        this.rl.question(chalk.dim('> '), (answer) => {
+        console.log(top);
+        this.rl.question(chalk.dim('│ ') + chalk.dim('> '), (answer) => {
           this.clearSlashPopup();
+          console.log(bot);
+          console.log(footer);
+          console.log();
           resolve(answer);
         });
       });
