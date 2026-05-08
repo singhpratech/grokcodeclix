@@ -27,23 +27,29 @@ TARGET_H = 30  # pixel rows; will be ceil(30/2) = 15 cell rows
 
 
 def trim_to_subject(img: Image.Image) -> Image.Image:
-    """Crop the dark teal background out to focus on the character."""
+    """Crop the background out to focus on the character.
+
+    Handles both dark (3D render) and bright/white (flat vector logo)
+    backgrounds by sampling the four corners. If they agree on a colour
+    that's the background.
+    """
     rgb = img.convert('RGB')
     px = rgb.load()
     w, h = rgb.size
 
-    # Sample the very top-left and the corners to estimate the background.
-    # The Pixar variant uses a dark teal-to-jungle gradient, so background
-    # pixels are dark and low-saturation green/teal.
-    def is_background(c, threshold=55):
+    corners = [px[0, 0], px[w - 1, 0], px[0, h - 1], px[w - 1, h - 1]]
+
+    def close(a, b, tol=22):
+        return all(abs(a[i] - b[i]) <= tol for i in range(3))
+
+    bg = corners[0] if all(close(corners[0], c) for c in corners[1:]) else None
+
+    def is_background(c):
+        if bg is not None:
+            return close(c, bg, tol=24)
+        # Fall back to dark-pixel heuristic.
         r, g, b = c
-        # Very dark pixels are background.
-        if r + g + b < threshold * 3:
-            return True
-        # Or strongly green/teal-dominant low-saturation pixels.
-        if g > r + 5 and g > b - 10 and r + g + b < 220:
-            return True
-        return False
+        return r + g + b < 165
 
     # Find subject bounding box by columns/rows that have at least one
     # non-background pixel.
@@ -67,15 +73,19 @@ def trim_to_subject(img: Image.Image) -> Image.Image:
     return rgb.crop((left, top, right, bot))
 
 
-def make_ansi(img: Image.Image, target_w: int, target_h: int) -> str:
-    # Pad to exactly even number of pixel rows.
+def make_ansi(img: Image.Image, target_w: int, target_h: int, bg_color=None) -> str:
+    """Render image as Unicode upper-half-block (▀) ANSI art.
+
+    Each cell encodes 2 stacked pixels: foreground = top, background = bottom.
+    If ``bg_color`` is provided, pixels close to it are treated as transparent
+    — that cell is rendered with default fg/bg so the mascot floats on the
+    user's actual terminal background.
+    """
     if target_h % 2 == 1:
         target_h += 1
 
-    # Calculate the cropped image's natural dimensions to maintain aspect.
     iw, ih = img.size
-    aspect = ih / iw  # >1 = portrait
-    # Map image width to target_w pixel cols, height to target_w * aspect
+    aspect = ih / iw
     pixel_w = target_w
     pixel_h = max(1, round(pixel_w * aspect))
     if pixel_h % 2 == 1:
@@ -84,36 +94,64 @@ def make_ansi(img: Image.Image, target_w: int, target_h: int) -> str:
 
     img = img.resize((pixel_w, pixel_h), Image.LANCZOS).convert('RGB')
 
+    def is_bg(c, tol=24):
+        if bg_color is None:
+            return False
+        return all(abs(c[i] - bg_color[i]) <= tol for i in range(3))
+
     out_lines = []
     pixels = img.load()
     for y in range(0, pixel_h, 2):
         line = ''
-        prev_top = None
-        prev_bot = None
         for x in range(pixel_w):
             top = pixels[x, y]
-            bot = pixels[x, y + 1] if (y + 1) < pixel_h else (0, 0, 0)
-            # Use ▀: top half block. fg = top, bg = bot.
-            # Reset between cells avoids state leak.
-            if top != prev_top:
-                line += f'\x1b[38;2;{top[0]};{top[1]};{top[2]}m'
-                prev_top = top
-            if bot != prev_bot:
-                line += f'\x1b[48;2;{bot[0]};{bot[1]};{bot[2]}m'
-                prev_bot = bot
-            line += '▀'
+            bot = pixels[x, y + 1] if (y + 1) < pixel_h else top
+            top_bg = is_bg(top)
+            bot_bg = is_bg(bot)
+
+            line += '\x1b[0m'  # reset between cells (cheap, robust)
+            if top_bg and bot_bg:
+                line += ' '   # both transparent
+            elif top_bg and not bot_bg:
+                # Show only bottom — use ▄ (lower-half) with bottom as fg
+                line += f'\x1b[38;2;{bot[0]};{bot[1]};{bot[2]}m▄'
+            elif not top_bg and bot_bg:
+                # Show only top — use ▀ (upper-half) with top as fg
+                line += f'\x1b[38;2;{top[0]};{top[1]};{top[2]}m▀'
+            else:
+                line += (
+                    f'\x1b[38;2;{top[0]};{top[1]};{top[2]}m'
+                    f'\x1b[48;2;{bot[0]};{bot[1]};{bot[2]}m▀'
+                )
         line += '\x1b[0m'
         out_lines.append(line)
     return '\n'.join(out_lines)
+
+
+def detect_bg_colour(img: Image.Image):
+    """Return the (r,g,b) corner-sampled background colour, or None."""
+    rgb = img.convert('RGB')
+    px = rgb.load()
+    w, h = rgb.size
+    corners = [px[0, 0], px[w - 1, 0], px[0, h - 1], px[w - 1, h - 1]]
+
+    def close(a, b, tol=22):
+        return all(abs(a[i] - b[i]) <= tol for i in range(3))
+
+    if all(close(corners[0], c) for c in corners[1:]):
+        return tuple(corners[0])
+    return None
 
 
 def main():
     print(f'Reading {SRC}…')
     img = Image.open(SRC)
     print(f'  original size: {img.size}')
+    bg = detect_bg_colour(img)
+    print(f'  detected bg: {bg}')
     cropped = trim_to_subject(img)
     print(f'  after subject crop: {cropped.size}')
-    art = make_ansi(cropped, TARGET_W, TARGET_H)
+    art = make_ansi(cropped, TARGET_W, TARGET_H, bg_color=bg)
 
     # Print a preview to stdout
     print('\n=== Preview (will look right on a 24-bit colour terminal) ===\n')
