@@ -44,6 +44,20 @@ const VERSION = packageJson.version;
 const SAFFRON = chalk.hex('#FF9933');
 const INDIA_GREEN = chalk.hex('#138808');
 
+/**
+ * Print a key prefix safe to display on screen. xAI keys always begin
+ * `xai-`, OpenRouter keys always begin `sk-or-`, so the prefix alone is
+ * irrefutable proof of which provider the request will hit.
+ */
+function redactKey(key: string | undefined): string {
+  if (!key) return '(none)';
+  // Show enough of the prefix to reveal the provider, then mask the rest.
+  // `xai-aBcD1234EfGh…` for xAI, `sk-or-v1-aBcD1234…` for OpenRouter.
+  if (key.length <= 8) return key + '…';
+  const head = key.startsWith('sk-or-') ? key.slice(0, 14) : key.slice(0, 8);
+  return head + '…' + key.slice(-4);
+}
+
 // Cheap structural detection — anything that the markdown renderer would
 // transform visibly. Plain prose / file paths / tool descriptions hit the
 // fast path (no rewind = no flicker). Code blocks, headers, lists, bold,
@@ -214,6 +228,7 @@ export class GrokChat {
 
     // Info
     '/status': 'Show session status',
+    '/whoami': 'Probe the live API to prove which provider + model is active',
     '/context': 'Show context window usage',
     '/cost': 'Show token usage and estimated cost',
     '/usage': 'Show usage statistics',
@@ -644,11 +659,15 @@ export class GrokChat {
     console.log(line(chalk.dim('  /help for help, /status for your current setup')));
     console.log(line(''));
     console.log(line(chalk.dim('  cwd: ') + cwd));
-    // Provider + model + base URL — visible up-front so the user can never be
-    // confused about which API their next message is going to.
+    // Provider + model + base URL + KEY PREFIX. The key prefix is the only
+    // truly irrefutable proof of which provider the next request will hit:
+    // `xai-...` keys MUST go to xAI, `sk-or-...` keys MUST go to OpenRouter,
+    // because the routing is derived from the prefix.
     const provTag = this.client.provider === 'xai' ? SAFFRON('xai') : chalk.cyan('openrouter');
     const baseUrl = this.client.provider === 'xai' ? 'api.x.ai/v1' : 'openrouter.ai/api/v1';
-    console.log(line(chalk.dim('  api: ') + provTag + chalk.dim(' · ') + chalk.white(this.client.model) + chalk.dim(' · ') + chalk.dim(baseUrl)));
+    const keyPrefix = redactKey(this.apiKey);
+    console.log(line(chalk.dim('  api: ') + provTag + chalk.dim(' · ') + chalk.white(this.client.model)));
+    console.log(line(chalk.dim('       ') + chalk.dim(baseUrl) + chalk.dim(' · key ') + chalk.white(keyPrefix)));
     if (resumedTitle) {
       console.log(line(chalk.dim('  resumed: ') + chalk.yellow(resumedTitle)));
     }
@@ -905,6 +924,10 @@ export class GrokChat {
       // Status & info
       case 'status':
         this.showStatus();
+        break;
+
+      case 'whoami':
+        await this.handleWhoami();
         break;
 
       case 'context':
@@ -1338,6 +1361,81 @@ export class GrokChat {
     const auto = (this.config.get('autoApprove') as string[]).join(', ') || 'none';
     console.log(chalk.dim(`  Auto-approved: ${auto}`));
     console.log();
+  }
+
+  /**
+   * /whoami — irrefutable proof of which provider + model is active.
+   * Hits the live API for a real round-trip and prints what came back.
+   * Useful when the user wants to verify their OpenRouter / xAI key is
+   * actually being used (instead of just trusting the in-app label).
+   */
+  private async handleWhoami(): Promise<void> {
+    const provider = this.client.provider;
+    const baseUrl = provider === 'xai' ? 'https://api.x.ai/v1' : 'https://openrouter.ai/api/v1';
+    const provTag = provider === 'xai'
+      ? SAFFRON('xai (api.x.ai/v1)')
+      : chalk.cyan('openrouter (openrouter.ai/api/v1)');
+
+    console.log();
+    console.log(chalk.bold('  /whoami'));
+    console.log(chalk.dim('  ───────'));
+    console.log(`  Configured:  ${provTag}`);
+    console.log(`  Key:         ${chalk.white(redactKey(this.apiKey))}`);
+    console.log(`  Model:       ${chalk.white(this.client.model)}`);
+    console.log();
+    console.log(chalk.dim('  Probing the live API to confirm…'));
+
+    const startedAt = Date.now();
+    let probeOk = false;
+    let probeDetail = '';
+    try {
+      const response = await fetch(`${baseUrl}/models`, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          ...(provider === 'openrouter' ? {
+            'HTTP-Referer': 'https://github.com/singhpratech/grokcodeclix',
+            'X-Title': 'Grok Code CLI',
+          } : {}),
+        },
+      });
+      const ms = Date.now() - startedAt;
+      if (response.ok) {
+        const data = (await response.json()) as { data?: Array<{ id: string }> };
+        const ids = (data.data || []).map((m) => m.id);
+        probeOk = true;
+        const grokIds = ids.filter((id) => /grok/i.test(id));
+        const total = ids.length;
+        const sample = grokIds.slice(0, 5).join(', ') || '(none with "grok" in id)';
+        probeDetail =
+          `${INDIA_GREEN('✓')} HTTP 200 in ${ms}ms · ${total} models listed\n` +
+          `       sample (grok-only): ${chalk.dim(sample)}`;
+
+        // Sanity-check: the configured model id should be in the list.
+        const exact = ids.includes(this.client.model);
+        if (exact) {
+          probeDetail += `\n       ${INDIA_GREEN('✓')} ${chalk.white(this.client.model)} is in the model list returned by ${provider}`;
+        } else {
+          probeDetail += `\n       ${chalk.yellow('!')} ${chalk.white(this.client.model)} is NOT in the model list — request may 404`;
+        }
+      } else {
+        const text = await response.text().catch(() => '');
+        probeDetail = `${chalk.red('✗')} HTTP ${response.status} in ${ms}ms · ${text.slice(0, 200)}`;
+      }
+    } catch (err) {
+      const ms = Date.now() - startedAt;
+      probeDetail = `${chalk.red('✗')} Network error in ${ms}ms · ${(err as Error).message}`;
+    }
+
+    console.log(`  Probe:       ${probeDetail}`);
+    console.log();
+    console.log(chalk.dim('  Cross-check on the provider dashboard:'));
+    if (provider === 'openrouter') {
+      console.log(chalk.dim('    https://openrouter.ai/activity — should show this request'));
+    } else {
+      console.log(chalk.dim('    https://console.x.ai/        — should show this request under Usage'));
+    }
+    console.log();
+    if (!probeOk) return;
   }
 
   private showStatus(): void {
@@ -2435,46 +2533,51 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
 
   /**
    * Atomically replace whatever popup is currently below the prompt with
-   * the provided lines. Uses *relative* cursor movement (up/down/clear)
-   * instead of DECSC/DECRC so it survives terminal scrolling — the old
-   * save-cursor approach would silently miss the saved position whenever
-   * the popup pushed the buffer past the bottom of the screen.
+   * the provided lines.
+   *
+   * Three rules learned the hard way:
+   *
+   *   • Use relative cursor moves, not DECSC/DECRC (\x1B7/\x1B8). The
+   *     save/restore pair silently breaks once the popup pushes the
+   *     terminal buffer past the bottom — the saved position no longer
+   *     points at the prompt row.
+   *
+   *   • DON'T call rl.prompt(true) afterwards. readline's _refreshLine
+   *     does `\r\x1B[J<prompt><line>` — that `\x1B[J` clears every cell
+   *     from the cursor to the end of the screen, which is exactly the
+   *     popup we just painted. Calling prompt(true) was making the popup
+   *     vanish a frame after we drew it, which is the "popup not running"
+   *     bug the user reported.
+   *
+   *   • Manually park the cursor at the right column on the prompt line
+   *     so the next keystroke types where the user expects it.
+   *     Visible prompt is `│ > ` (4 cells); cursor column = 4 + rl.cursor
+   *     in 0-indexed terms, so 5 + rl.cursor in ANSI's 1-indexed scheme.
    */
   private repaintPopup(lines: string[]): void {
     const out = process.stdout;
     const prev = this.slashPopupLines;
     const next = lines.length;
-
-    // Step 1: park readline's idea of cursor on the prompt line. We never
-    // moved off it ourselves, but readline may have repainted, so trust
-    // its current row as our anchor.
-    //
-    // Step 2: walk down `next` lines, writing each (clear + content), and
-    // also clear any leftover lines from the previous popup that aren't
-    // covered by the new one.
     const totalLines = Math.max(prev, next);
 
-    // Move *down* one line at a time so we land on a fresh row, write the
-    // content (or clear if past the new popup), then ascend back to the
-    // prompt line at the end.
-    let cursor = 0;
+    let descended = 0;
     for (let i = 0; i < totalLines; i++) {
-      out.write('\n\x1B[2K');
-      cursor++;
+      out.write('\n\x1B[2K'); // newline → next row col 0, then clear that row
+      descended++;
       if (i < next) {
         out.write(lines[i]);
       }
     }
 
-    // Now climb back to the prompt line. cursor === totalLines.
-    if (cursor > 0) {
-      out.write(`\x1B[${cursor}A`);
+    // Climb back to the prompt row.
+    if (descended > 0) {
+      out.write(`\x1B[${descended}A`);
     }
-    // Restore to readline's expected column. readline will redraw the
-    // prompt the next time the user types — but we want the cursor to
-    // sit at the END of what's been typed *now*, not at column 0.
-    // The cleanest way is to ask readline to re-emit its prompt + line.
-    this.rl.prompt(true);
+    // Move cursor to the column readline expects (visible prompt length +
+    // current cursor offset within the line). 1-indexed, so add 1.
+    const promptVisibleLen = 4; // `│ > `
+    const rlCursor = (this.rl as unknown as { cursor: number }).cursor ?? 0;
+    out.write(`\x1B[${promptVisibleLen + rlCursor + 1}G`);
 
     this.slashPopupLines = next;
     this.slashPopupActive = next > 0;
