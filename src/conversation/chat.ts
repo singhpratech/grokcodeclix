@@ -159,6 +159,10 @@ export class GrokChat {
   /** Live slash-popup bookkeeping */
   private slashPopupActive: boolean = false;
   private slashPopupLines: number = 0;
+  /** Currently selected item index in the slash popup */
+  private slashPopupSelectedIndex: number = 0;
+  /** Cached match list rendered by the popup so up/down can navigate it */
+  private slashPopupMatches: Array<[string, string]> = [];
   /** In-session todo list */
   private todos: { text: string; done: boolean }[] = [];
   /** Vim mode for input editing */
@@ -306,15 +310,61 @@ export class GrokChat {
           return;
         }
 
+        // Slash-popup interactions when the popup is open.
+        if (this.slashPopupActive && this.slashPopupMatches.length > 0) {
+          // Up/Down navigates the selection. Readline will also try to
+          // browse history on the same keys — we save the typed buffer
+          // and restore it on the next tick so history nav is undone
+          // and the popup-navigation feel wins.
+          if (key.name === 'up' || key.name === 'down') {
+            const savedLine = this.rl.line ?? '';
+            const savedCursor = (this.rl as unknown as { cursor: number }).cursor;
+            if (key.name === 'up') {
+              this.slashPopupSelectedIndex = Math.max(0, this.slashPopupSelectedIndex - 1);
+            } else {
+              this.slashPopupSelectedIndex = Math.min(
+                this.slashPopupMatches.length - 1,
+                this.slashPopupSelectedIndex + 1,
+              );
+            }
+            setImmediate(() => {
+              (this.rl as unknown as { line: string }).line = savedLine;
+              (this.rl as unknown as { cursor: number }).cursor = savedCursor;
+              this.rl.prompt(true);
+              this.updateSlashPopup();
+            });
+            return;
+          }
+          // Tab inserts the selected command and dismisses the popup.
+          if (key.name === 'tab') {
+            const [cmd] = this.slashPopupMatches[this.slashPopupSelectedIndex];
+            const current = this.rl.line ?? '';
+            const remainder = cmd.slice(current.length);
+            if (remainder) {
+              (this.rl as unknown as { line: string }).line = cmd;
+              (this.rl as unknown as { cursor: number }).cursor = cmd.length;
+              this.rl.prompt(true);
+            }
+            this.clearSlashPopup();
+            return;
+          }
+          // Esc dismisses the popup but keeps the typed text.
+          if (key.name === 'escape') {
+            this.clearSlashPopup();
+            return;
+          }
+        }
+
         // Live slash-command popup — IMPORTANT: keypress events fire
         // BEFORE readline updates rl.line with the new character, so
         // we have to defer the check to the next microtask to read
-        // the updated line.
+        // the updated line. We reset the selection to the top whenever
+        // the line content actually changes.
         if (!key.ctrl) {
           setImmediate(() => {
             const current = this.rl.line ?? '';
             if (current.startsWith('/')) {
-              this.updateSlashPopup();
+              this.updateSlashPopup({ resetSelection: true });
             } else if (this.slashPopupActive) {
               this.clearSlashPopup();
             }
@@ -2246,7 +2296,16 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
    * with '/'. Uses ANSI save/restore cursor escapes to avoid disturbing
    * readline's internal cursor tracking.
    */
-  private updateSlashPopup(): void {
+  /**
+   * Render the slash-command popup. Behaves like Claude Code:
+   *   - Pops open the moment the line starts with `/`
+   *   - Shows up to 10 visible matches, with `… +N more` when truncated
+   *   - The currently selected row is highlighted in saffron (▶ marker)
+   *   - Up/Down keys (handled in the keypress listener) move the selection
+   *   - Tab inserts the selected command into the input line
+   *   - Continuing to type narrows the list and resets selection to top
+   */
+  private updateSlashPopup(opts: { resetSelection?: boolean } = {}): void {
     if (!process.stdout.isTTY) return;
     const line = this.rl.line ?? '';
     if (!line.startsWith('/')) {
@@ -2264,30 +2323,64 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
 
     const query = line.toLowerCase();
     const matches = all.filter(([cmd]) => cmd.toLowerCase().startsWith(query));
-    const display = matches.slice(0, 8); // cap popup height
+
+    this.slashPopupMatches = matches;
+    if (opts.resetSelection || this.slashPopupSelectedIndex >= matches.length) {
+      this.slashPopupSelectedIndex = 0;
+    }
 
     // Clear the previous popup before drawing a new one.
     this.clearSlashPopup();
 
-    if (display.length === 0) return;
+    if (matches.length === 0) {
+      // Render a single "no matches" hint so the user gets feedback.
+      const out = process.stdout;
+      out.write('\x1B7');
+      out.write('\n\x1B[2K' + chalk.dim('  no matching commands'));
+      out.write('\x1B8');
+      this.slashPopupLines = 1;
+      this.slashPopupActive = true;
+      return;
+    }
 
-    const overflow = matches.length > display.length;
+    // Visible window of 10 items, scrolling around the selection so the
+    // active item stays in view (Claude Code-style).
+    const VISIBLE = 10;
+    const sel = this.slashPopupSelectedIndex;
+    const start = matches.length <= VISIBLE
+      ? 0
+      : Math.max(0, Math.min(matches.length - VISIBLE, sel - Math.floor(VISIBLE / 2)));
+    const end = Math.min(matches.length, start + VISIBLE);
+    const above = start;
+    const below = matches.length - end;
+
     const out = process.stdout;
-
-    // Save cursor, draw popup below, restore. These are ANSI escapes
-    // that the terminal handles — readline doesn't know about them
-    // and its internal state stays correct.
-    out.write('\x1B7'); // DECSC — save cursor (more widely supported than ESC[s)
+    out.write('\x1B7'); // DECSC — save cursor
 
     let drawn = 0;
-    for (const [cmd, desc] of display) {
-      out.write('\n\x1B[2K' + chalk.dim('  ') + chalk.cyan(cmd.padEnd(16)) + '  ' + chalk.dim(desc));
+    if (above > 0) {
+      out.write('\n\x1B[2K' + chalk.dim(`    ↑ ${above} more`));
       drawn++;
     }
-    if (overflow) {
-      out.write('\n\x1B[2K' + chalk.dim(`  … (+${matches.length - display.length} more)`));
+    for (let i = start; i < end; i++) {
+      const [cmd, desc] = matches[i];
+      const isSel = i === sel;
+      const pointer = isSel ? SAFFRON('  ▶ ') : '    ';
+      const cmdRender = isSel ? SAFFRON.bold(cmd.padEnd(18)) : chalk.cyan(cmd.padEnd(18));
+      const descRender = isSel ? chalk.white(desc) : chalk.dim(desc);
+      out.write('\n\x1B[2K' + pointer + cmdRender + '  ' + descRender);
       drawn++;
     }
+    if (below > 0) {
+      out.write('\n\x1B[2K' + chalk.dim(`    ↓ ${below} more`));
+      drawn++;
+    }
+    // Footer hint, Claude Code-style.
+    out.write(
+      '\n\x1B[2K' +
+      chalk.dim('    ↑↓ to navigate · Tab to insert · Enter to run · Esc to dismiss')
+    );
+    drawn++;
 
     out.write('\x1B8'); // DECRC — restore cursor
 
