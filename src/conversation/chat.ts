@@ -544,19 +544,14 @@ export class GrokChat {
   }
 
   private printWelcome(resumedTitle?: string): void {
-    // Print Naavi GrokAavi mascot art at the top in 24-bit colour.
-    // Suppressed when stdout isn't a TTY (pipes, CI logs) and when the
-    // terminal is too narrow to fit it cleanly.
-    if (process.stdout.isTTY && (process.stdout.columns || 80) >= 36) {
-      console.log();
-      console.log(NAAVI_MASCOT);
-      console.log();
-    }
+    // Claude-Code-faithful welcome: small bordered box, a single ✻ icon
+    // (saffron, matching tiranga), help hint, and cwd. Mascot is shown
+    // small and only on the FIRST run of a project — to greet the user
+    // without dominating the screen on every launch.
+    const cols = process.stdout.columns || 80;
+    const width = Math.min(cols - 2, 62);
+    const innerWidth = width - 4;
 
-    // Claude Code-style welcome: small bordered box with star icon,
-    // a help hint line, and the working directory.
-    const width = Math.min(process.stdout.columns || 62, 62);
-    const innerWidth = width - 4; // account for "│ " and " │"
     const top = chalk.dim('╭' + '─'.repeat(width - 2) + '╮');
     const bot = chalk.dim('╰' + '─'.repeat(width - 2) + '╯');
     const line = (text: string): string => {
@@ -564,21 +559,24 @@ export class GrokChat {
       const pad = Math.max(0, innerWidth - visible.length);
       return chalk.dim('│ ') + text + ' '.repeat(pad) + chalk.dim(' │');
     };
-    const blank = line('');
+
+    // Naavi mascot above the box. Suppressed in non-TTY (pipes, CI) so
+    // log output stays clean.
+    if (process.stdout.isTTY && cols >= 36) {
+      console.log();
+      console.log(NAAVI_MASCOT);
+    }
 
     const cwd = process.cwd().replace(os.homedir(), '~');
-    // Tri-color star row: saffron, white, green — tiranga accent.
-    const tricolor = SAFFRON('✻') + ' ' + chalk.white('✻') + ' ' + INDIA_GREEN('✻');
 
     console.log();
     console.log(top);
-    console.log(line(tricolor + '  ' + chalk.bold('Welcome to Grok Code!')));
-    console.log(blank);
+    console.log(line(SAFFRON('✻') + ' ' + chalk.bold('Welcome to Grok Code!')));
+    console.log(line(''));
     console.log(line(chalk.dim('  /help for help, /status for your current setup')));
-    console.log(blank);
+    console.log(line(''));
     console.log(line(chalk.dim('  cwd: ') + cwd));
     if (resumedTitle) {
-      console.log(blank);
       console.log(line(chalk.dim('  resumed: ') + chalk.yellow(resumedTitle)));
     }
     if (this.projectContext) {
@@ -1741,7 +1739,7 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
       ghArgs = ['pr', 'view', prRef, '--comments'];
     }
 
-    console.log(SAFFRON('● ') + chalk.bold('Bash') + chalk.dim('(') + chalk.white(`gh ${ghArgs.join(' ')}`) + chalk.dim(')'));
+    console.log(SAFFRON('⏺ ') + chalk.bold('Bash') + chalk.dim('(') + chalk.white(`gh ${ghArgs.join(' ')}`) + chalk.dim(')'));
     const spinner = startSpinner('Fetching…');
     try {
       const result = await executeTool('Bash', { command: `gh ${ghArgs.join(' ')}` });
@@ -1767,21 +1765,20 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
 
   private showTodos(): void {
     console.log();
-    console.log(chalk.bold('  Todos'));
-    console.log(chalk.dim('  ─────'));
     if (this.todos.length === 0) {
-      console.log(chalk.dim('  No todos. Add one with /todo <text>'));
+      console.log(SAFFRON('⏺ ') + chalk.bold('Todos') + chalk.dim(' (0 items)'));
+      console.log('  ' + chalk.dim('⎿  ') + chalk.dim('No todos. Add one with /todo <text>'));
       console.log();
       return;
     }
-    this.todos.forEach((t, i) => {
-      const box = t.done ? INDIA_GREEN('☑') : chalk.dim('☐');
-      const text = t.done ? chalk.dim.strikethrough(t.text) : t.text;
-      console.log(`  ${chalk.dim(String(i + 1).padStart(2))} ${box} ${text}`);
-    });
     const done = this.todos.filter((t) => t.done).length;
-    console.log();
-    console.log(chalk.dim(`  ${done}/${this.todos.length} done`));
+    console.log(SAFFRON('⏺ ') + chalk.bold('Todos') + chalk.dim(` (${done}/${this.todos.length} done)`));
+    console.log('  ' + chalk.dim('⎿'));
+    this.todos.forEach((t, i) => {
+      const box = t.done ? INDIA_GREEN('☒') : chalk.dim('☐');
+      const text = t.done ? chalk.dim.strikethrough(t.text) : t.text;
+      console.log(`     ${chalk.dim(String(i + 1).padStart(2))} ${box} ${text}`);
+    });
     console.log();
   }
 
@@ -2385,7 +2382,7 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
 
   /** Run a shell command immediately via Bash tool, bypassing Grok. */
   private async runShellEscape(command: string): Promise<void> {
-    console.log(SAFFRON('● ') + chalk.bold('Bash') + chalk.dim('(') + chalk.white(command) + chalk.dim(')'));
+    console.log(SAFFRON('⏺ ') + chalk.bold('Bash') + chalk.dim('(') + chalk.white(command) + chalk.dim(')'));
     const spinner = startSpinner('Running…');
     try {
       const result = await executeTool('Bash', { command });
@@ -2473,7 +2470,7 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
       console.log(chalk.red(`  ✗ ${result.error || 'Image generation failed'}`));
       return;
     }
-    console.log(SAFFRON('● ') + chalk.bold('Image generated'));
+    console.log(SAFFRON('⏺ ') + chalk.bold('Image generated'));
     console.log('  ' + chalk.dim('⎿  ') + (result.display?.summary || result.output));
     console.log();
   }
@@ -2500,7 +2497,7 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
       console.log(chalk.red(`  ✗ ${result.error || 'Transcription failed'}`));
       return;
     }
-    console.log(SAFFRON('● ') + chalk.bold('Transcript'));
+    console.log(SAFFRON('⏺ ') + chalk.bold('Transcript'));
     console.log();
     console.log(renderMarkdown(result.output));
     console.log();
@@ -2527,7 +2524,7 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
       console.log(chalk.red(`  ✗ ${result.error || 'Speech generation failed'}`));
       return;
     }
-    console.log(SAFFRON('● ') + chalk.bold('Speech generated'));
+    console.log(SAFFRON('⏺ ') + chalk.bold('Speech generated'));
     console.log('  ' + chalk.dim('⎿  ') + (result.display?.summary || result.output));
     console.log();
   }
@@ -2851,7 +2848,7 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
       planExitState.plan = '';
 
       console.log();
-      console.log(SAFFRON('● ') + chalk.bold('Proposed plan'));
+      console.log(SAFFRON('⏺ ') + chalk.bold('Proposed plan'));
       console.log();
       console.log(renderMarkdown(plan));
       console.log();
@@ -2879,12 +2876,9 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
       }
     }
 
-    // Render the live todo list when the model touched it this turn.
-    if (toolCalls.some((tc) => tc.function.name === 'TodoWrite') && todoState.items.length > 0) {
-      console.log(chalk.dim('  ── todos ──'));
-      console.log(renderTodoList(todoState.items));
-      console.log();
-    }
+    // The ☒/☐ checkbox list now renders inline under the TodoWrite tool's
+    // ⎿ result via display.preview — same nested layout as Claude Code,
+    // no separate "── todos ──" header.
   }
 
   private async executeToolCall(toolCall: ToolCall): Promise<void> {
@@ -2931,7 +2925,7 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
     });
 
     if (!approved) {
-      console.log(chalk.dim('  ') + chalk.red('● ') + chalk.dim(`${name}(${invocation}) — denied`));
+      console.log(chalk.dim('  ') + chalk.red('⏺ ') + chalk.dim(`${name}(${invocation}) — denied`));
       this.messages.push({
         role: 'tool',
         tool_call_id: toolCall.id,
@@ -2940,7 +2934,7 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
       return;
     }
 
-    console.log(SAFFRON('● ') + chalk.bold(name) + chalk.dim('(') + invocation + chalk.dim(')'));
+    console.log(SAFFRON('⏺ ') + chalk.bold(name) + chalk.dim('(') + invocation + chalk.dim(')'));
 
 
     // Execute with a spinner for slow tools
@@ -3058,8 +3052,10 @@ function formatToolInvocation(name: string, params: Record<string, unknown>): st
       return style(truncate(String(params.query || ''), 60));
     case 'TodoWrite': {
       const todos = (params.todos as Array<{ status: string }> | undefined) ?? [];
-      const done = todos.filter((t) => t.status === 'completed').length;
-      return style(`${done}/${todos.length} done`);
+      // Empty inline arg — Claude Code's "Update Todos" header has no
+      // parens; we keep the parens for consistency with other tools but
+      // make the inner text unobtrusive.
+      return chalk.dim(`${todos.length} item${todos.length === 1 ? '' : 's'}`);
     }
     default:
       return style(truncate(JSON.stringify(params), 60));

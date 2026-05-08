@@ -122,7 +122,7 @@ export class PermissionManager {
     const question = this.questionForTool(tool);
 
     console.log();
-    console.log(SAFFRON('● ') + chalk.bold(tool) + chalk.dim('(') + chalk.white(invocation) + chalk.dim(')'));
+    console.log(SAFFRON('⏺ ') + chalk.bold(tool) + chalk.dim('(') + chalk.white(invocation) + chalk.dim(')'));
     console.log();
     console.log('  ' + chalk.bold(question));
 

@@ -22,20 +22,26 @@ export const todoState: { items: TodoItem[] } = { items: [] };
 const SAFFRON = chalk.hex('#FF9933');
 const INDIA_GREEN = chalk.hex('#138808');
 
-function statusBadge(status: TodoStatus): string {
+/**
+ * Claude Code-style checkbox rendering.
+ *   ☒  completed
+ *   ☐  pending or in_progress (in_progress shown bold)
+ * Whichever item is in_progress is rendered bold so the eye lands on it.
+ */
+function checkbox(status: TodoStatus): string {
   switch (status) {
     case 'completed':
-      return INDIA_GREEN('✔');
+      return INDIA_GREEN('☒');
     case 'in_progress':
-      return SAFFRON('●');
+      return SAFFRON('☐');
     case 'pending':
     default:
-      return chalk.dim('○');
+      return chalk.dim('☐');
   }
 }
 
 export function renderTodoList(items: TodoItem[]): string {
-  if (items.length === 0) return chalk.dim('  (no todos)');
+  if (items.length === 0) return chalk.dim('     (no todos)');
   const lines: string[] = [];
   for (const t of items) {
     const text =
@@ -43,8 +49,9 @@ export function renderTodoList(items: TodoItem[]): string {
         ? chalk.dim.strikethrough(t.content)
         : t.status === 'in_progress'
           ? chalk.bold(t.activeForm || t.content)
-          : t.content;
-    lines.push(`  ${statusBadge(t.status)} ${text}`);
+          : chalk.dim(t.content);
+    // Two-space indent matches Claude Code's nested ⎿ list block.
+    lines.push(`     ${checkbox(t.status)} ${text}`);
   }
   return lines.join('\n');
 }
@@ -80,15 +87,15 @@ export async function todoWriteTool(params: TodoWriteParams): Promise<ToolResult
 
   todoState.items = valid;
 
-  const summary =
-    `${valid.filter((t) => t.status === 'completed').length}/${valid.length} done` +
-    (inProgress ? ` · 1 in progress` : '');
+  const completed = valid.filter((t) => t.status === 'completed').length;
 
+  // Claude Code uses a single-word summary on the ⏺ header and shows the
+  // full checkbox list under ⎿. We match that.
   return {
     success: true,
-    output: `Updated todo list (${valid.length} item${valid.length === 1 ? '' : 's'}, ${summary})`,
+    output: `Updated todo list (${completed}/${valid.length} completed${inProgress ? ', 1 in progress' : ''})`,
     display: {
-      summary: `Todos · ${summary}`,
+      summary: 'Update Todos',
       preview: renderTodoList(valid),
     },
   };
