@@ -827,15 +827,23 @@ export class GrokChat {
 
       case 'stream':
         this.useStreaming = !this.useStreaming;
-        console.log(chalk.dim(`  Streaming ${this.useStreaming ? 'enabled' : 'disabled'}.`));
+        console.log();
+        console.log('  ' + chalk.bold('Streaming ') + (this.useStreaming ? chalk.green('on') : chalk.dim('off')));
+        console.log();
         break;
 
       case 'plan':
         this.planMode = !this.planMode;
-        console.log(
-          chalk.dim('  Plan mode ') + (this.planMode ? chalk.yellow('on') : chalk.dim('off')) +
-          chalk.dim(' — Write/Edit/Bash will be denied while on.')
-        );
+        console.log();
+        if (this.planMode) {
+          console.log(
+            '  ' + chalk.bold('Plan mode ') + chalk.yellow('on') +
+            chalk.dim(' — read-only. Write/Edit/MultiEdit/Bash/KillBash blocked until ExitPlanMode is approved.')
+          );
+        } else {
+          console.log('  ' + chalk.bold('Plan mode ') + chalk.dim('off'));
+        }
+        console.log();
         break;
 
       case 'permissions':
@@ -1257,8 +1265,7 @@ export class GrokChat {
     const modeLabel = this.thinkingMode ? 'thinking' : 'fast';
     console.log();
     console.log(
-      SAFFRON('✦ ') +
-      chalk.bold('Model set to ') +
+      '  ' + chalk.bold('Model set to ') +
       chalk.white(model) +
       chalk.dim(`  (${modeIcon} ${modeLabel} mode)`)
     );
@@ -1274,7 +1281,7 @@ export class GrokChat {
     console.log(`  ${chalk.red('⚡ Execute')} Bash`);
     console.log();
     console.log(chalk.bold('  Prompt responses'));
-    console.log('  [Allow once] [Allow session] [Deny] [Block session]');
+    console.log('  ' + chalk.dim('1. Yes  ·  2. Yes, don\'t ask again this session  ·  3. No (esc)'));
     console.log();
     const auto = (this.config.get('autoApprove') as string[]).join(', ') || 'none';
     console.log(chalk.dim(`  Auto-approved: ${auto}`));
@@ -1289,7 +1296,7 @@ export class GrokChat {
     const usagePct = Math.min(100, Math.round((estTokens / this.contextWindowTokens) * 100));
 
     console.log();
-    console.log('  ' + SAFFRON('✻') + ' ' + chalk.bold('Grok Code Status'));
+    console.log('  ' + chalk.bold('Grok Code Status'));
     console.log(chalk.dim('  ────────────────'));
     console.log();
 
@@ -1894,7 +1901,7 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
       }
     }
     console.log();
-    console.log(SAFFRON('✦ ') + chalk.bold(`Vim mode ${this.vimMode ? chalk.green('on') : chalk.dim('off')}`));
+    console.log('  ' + chalk.bold(`Vim mode ${this.vimMode ? chalk.green('on') : chalk.dim('off')}`));
     if (this.vimMode) {
       console.log(chalk.dim('  Note: input editing uses emacs-style keys (readline default).'));
       console.log(chalk.dim('  Vim mode is a placeholder — file an issue if you need full vim bindings.'));
@@ -1906,7 +1913,7 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
 
   private showTerminalSetup(): void {
     console.log();
-    console.log(chalk.bold('  ⌨  Terminal setup'));
+    console.log(chalk.bold('  Terminal setup'));
     console.log(chalk.dim('  ─────────────────'));
     console.log();
     console.log(chalk.bold('  Recommended shell aliases'));
@@ -2085,7 +2092,9 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
     if (choice && (valid as string[]).includes(choice)) {
       this.outputStyle = choice as typeof this.outputStyle;
       this.reinjectStyle();
-      console.log(chalk.dim(`  Output style: ${this.outputStyle}`));
+      console.log();
+      console.log('  ' + chalk.bold('Output style ') + chalk.white(this.outputStyle));
+      console.log();
       return;
     }
 
@@ -2099,7 +2108,9 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
     if (selected) {
       this.outputStyle = selected as typeof this.outputStyle;
       this.reinjectStyle();
-      console.log(chalk.dim(`  ✓ Output style: ${this.outputStyle}`));
+      console.log();
+      console.log('  ' + chalk.bold('Output style ') + chalk.white(this.outputStyle));
+      console.log();
     }
   }
 
@@ -2120,7 +2131,9 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
 
     if (choice && (valid as readonly string[]).includes(choice)) {
       this.theme = choice as typeof this.theme;
-      console.log(chalk.dim(`  Theme: ${this.theme} ${chalk.yellow('(restart for full effect)')}`));
+      console.log();
+      console.log('  ' + chalk.bold('Theme ') + chalk.white(this.theme) + chalk.dim('  (restart for full effect)'));
+      console.log();
       return;
     }
 
@@ -2133,7 +2146,9 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
     const selected = await interactiveSelect('Theme:', options, this.theme);
     if (selected) {
       this.theme = selected as typeof this.theme;
-      console.log(chalk.dim(`  ✓ Theme: ${this.theme} ${chalk.yellow('(restart for full effect)')}`));
+      console.log();
+      console.log('  ' + chalk.bold('Theme ') + chalk.white(this.theme) + chalk.dim('  (restart for full effect)'));
+      console.log();
     }
   }
 
@@ -2194,7 +2209,7 @@ Be concise and actionable. Do NOT make up issues — only flag what you see in t
     const hr = d('  ────────────────────────────────────────────────────────────────');
 
     console.log();
-    console.log('  ' + SAFFRON('✻') + ' ' + chalk.bold('Grok Code ') + d(`v${VERSION}`));
+    console.log('  ' + chalk.bold('Grok Code ') + d(`v${VERSION}`));
     console.log(hr);
     console.log();
 

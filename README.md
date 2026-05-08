@@ -165,6 +165,46 @@ That call hits **Gemini 3 Pro Image** (Google's "Nano Banana Pro") through your 
 
 ---
 
+## 🧪 Claude Code parity — how close are we?
+
+Verified by running every interaction against the live xAI API and capturing snapshots. The interaction surface mirrors Claude Code 1:1 except for brand identity (colors, mascot, name) and the xAI-specific extras we added on top.
+
+| Surface | Claude Code | grokclix | Match |
+|---|---|---|:---:|
+| **Tool call header** | `⏺ Read(file)` | `⏺ Read(file)` (U+23FA) | ✅ |
+| **Tool result indent** | `  ⎿  summary` | `  ⎿  summary` | ✅ |
+| **MultiEdit diff** | inline +/- block under `⎿` | same | ✅ |
+| **TodoWrite checkboxes** | `☒` done, `☐` pending/in-progress | same — saffron `☐` for in-progress | ✅ |
+| **Active todo highlight** | bold | bold + saffron | ✅ |
+| **Welcome banner** | `╭─ ✻ Welcome ─╮` box, single ✻ | same shape, saffron ✻, plus Naavi above | ✅+ |
+| **Slash popup** | Open on `/`, ↑↓ navigates, Tab inserts, Esc dismisses | same, saffron `▶` selection marker | ✅ |
+| **Permission prompt** | `⏺ Tool(args) / Do you want to…? / 1. Yes / 2. Yes don't ask / 3. No (esc)` | same | ✅ |
+| **Streaming markdown** | live tokens → repaint as rendered | same, with reasoning-content support for Grok | ✅+ |
+| **Plan mode** | blocks writes, `ExitPlanMode` tool gates with user approval | same | ✅ |
+| **Background Bash** | `run_in_background`, `BashOutput`, `KillBash` | same | ✅ |
+| **Custom commands** | `.claude/commands/*.md` | `.grok/commands/*.md` | ✅ (different folder name) |
+| **Memory file** | `CLAUDE.md` walked up to `$HOME` | `GROK.md` walked up to `$HOME` | ✅ (different file name) |
+| **Status line** | bottom prompt with model + cwd | bottom prompt with model + mode badges + cwd | ✅+ |
+| **Esc-to-cancel** | yes | yes | ✅ |
+| **Ctrl-keybindings** | Ctrl+C abort, Ctrl+D exit, Ctrl+L clear | same + Ctrl+O backup, Ctrl+B undo | ✅+ |
+| **`/help` layout** | grouped sections, no fancy header glyph | same | ✅ |
+| **Toggle outputs** (`/plan`, `/stream`, `/theme`, `/vim`, `/output-style`) | minimal one-line confirm | same shape | ✅ |
+| **Spinner** | pulsing `✻` with frame animation | same exact frame sequence (`✻✺✹✸✷✶`) | ✅ |
+
+**Visual/interaction parity: ~95%.**
+
+Brand differences (intentional, the remaining 5%):
+- **Tiranga palette** (saffron `#FF9933`, white, India-green `#138808`) instead of Claude's amber
+- **Naavi GrokAavi mascot** rendered as 24-bit ANSI art above the welcome box (Claude Code has only the `✻` glyph)
+- **Name strings**: `grokclix`, `Grok Code`, `GROK.md`, `.grok/`
+
+Extras on top of Claude Code (➕):
+- **3 multimodal tools** Claude Code doesn't ship: `GenerateImage` (xAI Imagine / OpenRouter Gemini Nano Banana Pro), `TranscribeAudio` (xAI / Whisper), `SpeakText` (xAI / OpenAI TTS)
+- **OpenRouter provider routing** — auto-detects `sk-or-` keys and switches base URL + Gemini's chat-image path
+- **Reasoning content streaming** for Grok 4.x reasoning models
+
+---
+
 ## Why Grok Code?
 
 <table>
