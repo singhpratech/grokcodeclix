@@ -14,9 +14,12 @@ export async function grepTool(params: GrepToolParams): Promise<ToolResult> {
       '-r',
       '-n',
       '-H',
-      '--include=*.{ts,tsx,js,jsx,json,md,py,go,rs,java,kt,swift,c,cpp,h,hpp,css,scss,html,xml,yaml,yml,toml}',
     ];
 
+    // Honour an explicit `include` glob from the caller. Without one, search
+    // ALL files — the previous hardcoded list (.ts, .py, .md, .go…) silently
+    // skipped anything outside its allow-list (.txt, .conf, .ini, .log, dot-
+    // files, anything else), which produced surprising "no matches" results.
     if (params.include) {
       args.push(`--include=${params.include}`);
     }

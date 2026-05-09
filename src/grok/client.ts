@@ -287,7 +287,7 @@ export class GrokClient {
     let hint = '';
     switch (status) {
       case 401:
-        hint = ' — check your API key (run `grok auth`)';
+        hint = ' — check your API key (run `grokclix /login`)';
         break;
       case 403:
         hint = ' — your account may not have access to this model';

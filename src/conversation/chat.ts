@@ -644,10 +644,13 @@ export class GrokChat {
     };
 
     // Naavi mascot above the box. Suppressed in non-TTY (pipes, CI) so
-    // log output stays clean.
+    // log output stays clean. Centered to the welcome box width.
     if (process.stdout.isTTY && cols >= 36) {
+      // The mascot is 7 visible cells wide (`✦  ✻  ✦`). Centre it inside
+      // the same `width` we use for the welcome box.
+      const mascotPad = Math.max(0, Math.floor((width - 7) / 2));
       console.log();
-      console.log(NAAVI_MASCOT);
+      console.log(' '.repeat(mascotPad) + NAAVI_MASCOT);
     }
 
     const cwd = process.cwd().replace(os.homedir(), '~');
@@ -832,8 +835,12 @@ export class GrokChat {
   // === Command Handler ===
 
   private async handleCommand(command: string): Promise<boolean> {
-    const parts = command.slice(1).split(' ');
-    const cmd = parts[0].toLowerCase();
+    // Trim the input to defend against trailing CR / spaces / newline that
+    // sneak in via `\r\n` terminals or piped stdin — without this the
+    // dispatcher would see e.g. cmd="plan\r" and fall through to "Unknown
+    // command: /plan" even though the case 'plan' arm is right there.
+    const parts = command.trim().slice(1).split(/\s+/);
+    const cmd = parts[0].toLowerCase().trim();
     const args = parts.slice(1).join(' ');
 
     // Check custom commands first (allow project overrides)
